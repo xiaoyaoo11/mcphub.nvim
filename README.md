@@ -77,25 +77,25 @@ local resource = hub:access_resource("server-name", "resource://uri")
 
 ![Server Lifecycle](public/diagrams/server-lifecycle.png)
 
-    The diagram above shows how multiple Neovim instances interact with a single MCP Hub server. The first instance starts the server, while others connect to the existing one. When the last client disconnects, the server automatically shuts down.
+The diagram above shows how multiple Neovim instances interact with a single MCP Hub server. The first instance starts the server, while others connect to the existing one. When the last client disconnects, the server automatically shuts down.
 
 ### Request Flow
 
 ![Request Flow](public/diagrams/request-flow.png)
 
-    Detailed sequence of how the plugin interacts with the MCP Hub server, from initial startup to status display, showing both the startup sequence and normal operation.
+Detailed sequence of how the plugin interacts with the MCP Hub server, from initial startup to status display, showing both the startup sequence and normal operation.
 
 ### Cleanup Process
 
 ![Cleanup Flow](public/diagrams/cleanup-flow.png)
 
-    The cleanup process ensures proper resource management and server shutdown. It handles both individual client disconnection and full server shutdown when appropriate.
+The cleanup process ensures proper resource management and server shutdown. It handles both individual client disconnection and full server shutdown when appropriate.
 
 ### API Interaction
 
 ![API Flow](public/diagrams/api-interaction.png)
 
-    Shows how chat plugins can interact with MCP servers through our plugin's API, including error handling and status checking.
+Shows how chat plugins can interact with MCP servers through our plugin's API, including error handling and status checking.
 
 ## Requirements
 
