@@ -9,8 +9,6 @@
 
 ## ✨ Features
 
-## Features
-
 - Simple single-command interface (`:MCPHub`)
 - Automatic server lifecycle management
 - Async operations - no blocking
@@ -309,6 +307,67 @@ This project follows a [Code of Conduct](./CODE_OF_CONDUCT.md) to ensure a welco
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE.md](./LICENSE.md) file for details.
+
+## 🗺️ Roadmap
+
+### Upcoming Features
+
+1. **Enhanced UI Integration**
+
+   - Lazy.nvim/Mason-style interface for MCP server management
+   - Interactive server status dashboard
+   - Tool and resource browser with filtering and search
+   - Rich command palette integration
+   - Floating windows for tool execution and resource viewing
+
+2. **Prompt Engineering Utilities**
+
+   - Smart server selection based on prompt content
+   - Automatic tool/resource selection helpers
+   - Prompt templates and generators
+   - Context-aware prompt building
+   - Response parsing and formatting utilities
+
+3. **Server Management Improvements**
+
+   - Server health monitoring dashboard
+   - Performance metrics and analytics
+   - Auto-recovery and failover strategies
+   - Configuration management UI
+   - Batch operations support
+
+4. **Developer Tools**
+
+   - Server capability introspection
+   - Tool response debugger
+   - Request/response logging viewer
+   - Performance profiling tools
+   - Test utilities for MCP integrations
+
+5. **Quality of Life Features**
+   - Command history and favorites
+   - Customizable keymaps
+   - Telescope integration
+   - Snippet generation from responses
+   - Session persistence
+
+### Long-term Goals
+
+1. **Community Integration**
+
+   - Server discovery and sharing
+   - Tool/resource marketplace
+   - Community templates and configs
+   - Integration guides and examples
+
+2. **Advanced Features**
+   - Multi-server orchestration
+   - Response caching and optimization
+   - Custom server templates
+   - Automated workflow creation
+   - Integration with popular Neovim plugins
+
+Your contributions and suggestions are welcome! Feel free to open issues or submit pull requests to help implement these features.
 
 ## ⭐ Show Your Support
 
