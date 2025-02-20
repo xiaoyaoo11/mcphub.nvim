@@ -1,6 +1,13 @@
 # MCPHub.nvim
 
-Neovim plugin for managing MCP (Model Context Protocol) servers through [mcp-hub](https://github.com/ravitemer/mcp-hub).
+[![Neovim](https://img.shields.io/badge/NeoVim-%2357A143.svg?&style=flat-square&logo=neovim&logoColor=white)](https://neovim.io)
+[![Lua](https://img.shields.io/badge/Lua-2C2D72?style=flat-square&logo=lua&logoColor=white)](https://www.lua.org)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
+
+> A powerful Neovim plugin for managing MCP (Model Context Protocol) servers through [mcp-hub](https://github.com/ravitemer/mcp-hub).
+
+## ✨ Features
 
 ## Features
 
@@ -283,6 +290,26 @@ end)
    - Review logs for startup sequence
    - Check API health endpoint
 
-## License
+## 🤝 Contributing
 
-MIT License - See LICENSE file for details
+Contributions are welcome! Please read our [Contributing Guidelines](./CONTRIBUTING.md) for details on how to submit pull requests, report issues, and contribute to the project.
+
+## 🔒 Security
+
+Found a security issue? Please review our [Security Policy](./SECURITY.md) and follow the vulnerability reporting process.
+
+## 📝 Changelog
+
+See [CHANGELOG.md](./CHANGELOG.md) for a detailed list of changes between releases.
+
+## 📜 Code of Conduct
+
+This project follows a [Code of Conduct](./CODE_OF_CONDUCT.md) to ensure a welcoming and inclusive environment for all contributors.
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE.md](./LICENSE.md) file for details.
+
+## ⭐ Show Your Support
+
+Give a ⭐️ if this project helped you!
