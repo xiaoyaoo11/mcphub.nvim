@@ -1,46 +1,69 @@
-local MCPHub = require('mcphub.mcphub')
+local MCPHub = require("mcphub.hub")
+
+--- @type MCPHub | nil
+local hub_instance = nil
 
 local M = {}
 
---- Setup function for configuring the plugin
---- @param opts table Configuration options
---- @field port number Port number for the MCP Hub server (default: 3000)
---- @field config string Path to the MCP servers configuration file
---- @field watch boolean Whether to watch the config file for changes (default: false)
---- @field commands table Optional table of user commands to create
---- @field keymaps table Optional table of keymaps to set up
+--- Setup function to configure the plugin
+--- @param opts? { port?: number, config?: string } Configuration options
 function M.setup(opts)
-    if not opts then
-        error('mcphub.setup() requires a configuration table')
+  -- Return existing instance if already initialized
+  if hub_instance then
+    return hub_instance
+  end
+
+  -- Create new instance and store
+  hub_instance = MCPHub:new(opts or {})
+  if not hub_instance then
+    return nil
+  end
+
+  -- Create the main command
+  vim.api.nvim_create_user_command("MCPHub", function()
+    hub_instance:display_status()
+  end, {
+    desc = "Show MCP Hub status"
+  })
+
+  -- Set up clean exit handler with unique namespace
+  vim.api.nvim_create_autocmd("VimLeavePre", {
+    group = vim.api.nvim_create_augroup("mcphub_cleanup", {
+      clear = true
+    }),
+    callback = function()
+      if hub_instance then
+        hub_instance:stop()
+      end
     end
+  })
 
-    if not opts.port then
-        error('mcphub.setup() requires a port number')
-    end
+  return hub_instance
+end
 
-    if not opts.config then
-        error('mcphub.setup() requires a config file path')
-    end
+--- Start the MCP Hub server
+--- @param opts? { on_ready?: function, on_error?: function } Optional callbacks
+function M.start_hub(opts)
+  if not hub_instance then
+    vim.notify("MCPHub not initialized. Call setup() first", vim.log.levels.ERROR)
+    return
+  end
+  hub_instance:start(opts)
+end
 
-    M.instance = MCPHub:new(opts)
-    M.instance:initialize()
+--- Stop the MCP Hub connection
+function M.stop_hub()
+  if not hub_instance then
+    vim.notify("MCPHub not initialized. Call setup() first", vim.log.levels.ERROR)
+    return
+  end
+  hub_instance:stop()
+end
 
-    -- Set up single user command
-    vim.api.nvim_create_user_command('MCPHub', function()
-        M.instance:show()
-    end, {
-        desc = 'Show MCP Hub interface'
-    })
-
-    -- Set up optional keymaps
-    if opts.keymaps then
-        for lhs, rhs in pairs(opts.keymaps) do
-            vim.keymap.set('n', lhs, rhs, {
-                silent = true,
-                noremap = true
-            })
-        end
-    end
+--- Get the MCPHub instance for direct access if needed
+--- @return MCPHub | nil Instance or nil if not initialized
+function M.get_hub_instance()
+  return hub_instance
 end
 
 return M

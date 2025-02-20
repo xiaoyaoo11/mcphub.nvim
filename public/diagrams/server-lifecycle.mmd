@@ -1,0 +1,34 @@
+sequenceDiagram
+    participant N1 as First Neovim
+    participant N2 as Other Neovims
+    participant S as MCP Hub Server
+    
+    Note over N1,S: First Client Connection
+    N1->>S: Check if Running
+    activate S
+    S-->>N1: Not Running
+    N1->>S: start_hub()
+    Note over S: Server Start
+    S-->>N1: Ready Signal
+    N1->>S: Register Client
+    S-->>N1: Registration OK
+    
+    Note over N2,S: Other Clients
+    N2->>S: Check if Running
+    S-->>N2: Running
+    N2->>S: Register Client
+    S-->>N2: Registration OK
+    
+    Note over N1,S: Server stays active
+    
+    Note over N2,S: Client Disconnection
+    N2->>S: Unregister Client
+    S-->>N2: OK
+    Note over S: Keep Running
+    
+    Note over N1,S: Last Client Exit
+    N1->>S: Unregister Client
+    S-->>N1: OK
+    Note over S: Grace Period
+    Note over S: Auto Shutdown
+    deactivate S

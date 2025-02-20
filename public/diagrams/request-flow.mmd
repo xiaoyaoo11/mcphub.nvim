@@ -1,0 +1,16 @@
+sequenceDiagram
+    participant N as Neovim
+    participant P as Plugin
+    participant S as MCP Hub Server
+    N->>P: start_hub()
+    P->>S: Health Check
+    alt Server Not Running
+        P->>S: Start Server
+        S-->>P: Ready Signal
+    end
+    P->>S: Register Client
+    S-->>P: Registration OK
+    N->>P: :MCPHub
+    P->>S: Get Status
+    S-->>P: Server Status
+    P->>N: Display UI

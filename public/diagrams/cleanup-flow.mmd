@@ -1,0 +1,8 @@
+flowchart LR
+    A[VimLeavePre] -->|Trigger| B[Stop Hub]
+    B -->|If Ready| C[Unregister Client]
+    C -->|Last Client| D[Server Auto-shutdown]
+    C -->|Other Clients| E[Server Continues]
+    B --> F[Clear State]
+    F --> G[Ready = false]
+    F --> H[Owner = false]

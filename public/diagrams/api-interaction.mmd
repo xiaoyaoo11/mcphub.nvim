@@ -1,0 +1,19 @@
+sequenceDiagram
+    participant C as Chat Plugin
+    participant H as Hub Instance
+    participant S as MCP Server
+    C->>H: call_tool()
+    H->>H: Check Ready
+    alt Not Ready
+        H-->>C: Error: Not Ready
+    end
+    H->>S: POST /tools
+    S-->>H: Tool Result
+    H-->>C: Return Result
+    Note over C,S: Similar flow for resources
+    
+    C->>H: access_resource()
+    H->>H: Check Ready
+    H->>S: POST /resources
+    S-->>H: Resource Data
+    H-->>C: Return Data
