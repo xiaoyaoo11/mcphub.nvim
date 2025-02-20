@@ -112,6 +112,68 @@ end)
 -- mcphub.stop_hub()
 ```
 
+## API Reference
+
+### REST API Endpoints
+
+You can directly access the MCP Hub server's API at `http://localhost:<port>/api/`. Available endpoints:
+
+- `GET /api/health` - Server health check
+- `GET /api/servers` - List all connected servers
+- `GET /api/servers/{name}` - Get specific server info
+- `POST /api/servers/{name}/tools` - Call a tool
+- `POST /api/servers/{name}/resources` - Access a resource
+
+### MCP Server Schema
+
+Each MCP Server information follows this schema:
+
+```typescript
+{
+  name: string,
+  status: "disconnected" | "connecting" | "connected",
+  error: string | null,
+  capabilities: {
+    tools: Array<{
+      name: string,
+      description: string,
+      parameters: object // Tool-specific parameters
+    }>,
+    resources: Array<{
+      uri: string,
+      type: string
+    }>,
+    resourceTemplates: Array<{
+      uriTemplate: string,
+      type: string
+    }>
+  },
+  uptime: number,    // Server uptime in seconds
+  lastStarted: string // ISO timestamp
+}
+```
+
+### Tool Response Schema
+
+```typescript
+{
+  result: any, // Tool-specific result data
+  error?: string // Error message if failed
+}
+```
+
+### Resource Response Schema
+
+```typescript
+{
+  content: any,   // Resource content
+  type: string,   // Resource type
+  error?: string  // Error message if failed
+}
+```
+
+For development and debugging, you can directly query these endpoints.
+
 ## Architecture
 
 ### Server Lifecycle
@@ -161,6 +223,19 @@ hub:is_ready()        -- returns boolean (sync, safe to call)
 hub:display_status()  -- shows UI with current status
 ```
 
+## Logging Configuration
+
+The plugin supports configurable logging with the following options:
+
+```lua
+{
+    level = vim.log.levels.WARN,  -- Log level threshold
+    to_file = false,             -- Enable file logging
+    file_path = nil,             -- Path to log file
+    prefix = "MCPHub"            -- Prefix for log messages
+}
+```
+
 ## Requirements
 
 - Neovim >= 0.8.0
@@ -190,6 +265,7 @@ end)
    - Check config file path
    - Enable DEBUG log level for detailed output
    - Check log file if file logging enabled
+   - Test API directly: `curl http://localhost:3000/api/health`
 
 2. **Connection Issues**
 
@@ -197,6 +273,7 @@ end)
    - Check port configuration
    - Verify client registration
    - Monitor log output for connection attempts
+   - Test API endpoints directly with curl
 
 3. **Status Shows Not Ready**
    - Call mcphub.start_hub()
@@ -204,6 +281,7 @@ end)
    - Verify connection state
    - Check error callbacks
    - Review logs for startup sequence
+   - Check API health endpoint
 
 ## License
 
