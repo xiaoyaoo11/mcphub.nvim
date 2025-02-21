@@ -6,7 +6,7 @@ local M = {}
 --- @field file_path? string Path to log file
 --- @field prefix string Prefix for log messages
 local config = {
-    log_level = vim.log.levels.WARN,
+    level = vim.log.levels.ERROR,
     to_file = false,
     file_path = nil,
     prefix = "MCPHub"
@@ -24,66 +24,101 @@ function M.setup(opts)
     end
 end
 
---- Internal logging function
---- @param msg string
---- @param level number
-local function log_internal(msg, level)
-    if level < config.log_level then
-        return
-    end
-
-    local formatted = string.format("[%s] %s", config.prefix, msg)
-
-    -- Log to file if configured
-    if config.to_file and config.file_path then
-        local timestamp = os.date("%Y-%m-%d %H:%M:%S")
-        local level_str = ({
-            [vim.log.levels.DEBUG] = "DEBUG",
-            [vim.log.levels.INFO] = "INFO",
-            [vim.log.levels.WARN] = "WARN",
-            [vim.log.levels.ERROR] = "ERROR"
-        })[level] or "UNKNOWN"
-
-        local log_line = string.format("%s [%s] %s\n", timestamp, level_str, formatted)
-        local f = io.open(config.file_path, "a")
-        if f then
-            f:write(log_line)
-            f:close()
+--- Format structured message
+--- @param msg string|table Message or structured data
+--- @param level_str string Level string for log prefix
+--- @return string formatted_message
+local function format_message(msg, level_str)
+    if type(msg) == "table" then
+        -- Handle structured logs (from server)
+        if msg.code and msg.message then
+            local base = string.format("[%s] [%s] %s", config.prefix, msg.code, msg.message)
+            if msg.data then
+                return string.format("%s\nData: %s", base, vim.inspect(msg.data))
+            end
+            return base
         end
+        -- Regular table data
+        return string.format("[%s] [%s] %s", config.prefix, level_str, vim.inspect(msg))
+    end
+    -- String message
+    return string.format("[%s] [%s] %s", config.prefix, level_str, msg)
+end
+
+--- Write to log file
+--- @param formatted string Formatted message
+--- @param level_str string Level string
+--- @param level number Log level
+--- @return boolean success Whether the write was successful
+local function write_to_file(formatted, level_str, level)
+    -- Only write if:
+    -- 1. File logging is enabled and path is set
+    -- 2. Level meets minimum configured level
+    if not (config.to_file and config.file_path) or level < config.level then
+        return false
     end
 
-    -- Always notify for errors
-    if level >= vim.log.levels.ERROR then
-        vim.notify(formatted, level)
+    local timestamp = os.date("%Y-%m-%d %H:%M:%S")
+    local log_line = string.format("%s [%s] %s\n", timestamp, level_str, formatted)
+
+    local f = io.open(config.file_path, "a")
+    if f then
+        f:write(log_line)
+        f:close()
+        return true
+    end
+    return false
+end
+
+--- Internal logging function
+--- @param msg string|table Message or structured data
+--- @param level number Log level
+local function log_internal(msg, level)
+    -- Early return if below configured level and not an error
+    if level < config.level and level < vim.log.levels.ERROR then
         return
     end
 
-    -- For other levels, only notify if level is within configured range
-    if level >= config.log_level then
-        vim.notify(formatted, level)
+    local level_str = ({
+        [vim.log.levels.DEBUG] = "DEBUG",
+        [vim.log.levels.INFO] = "INFO",
+        [vim.log.levels.WARN] = "WARN",
+        [vim.log.levels.ERROR] = "ERROR"
+    })[level] or "UNKNOWN"
+
+    local formatted = format_message(msg, level_str)
+    local wrote_to_file = write_to_file(formatted, level_str, level)
+
+    -- Only notify if:
+    -- 1. It's an error (always show errors) OR
+    -- 2. Level meets minimum AND we didn't write to file
+    if level >= vim.log.levels.ERROR or (level >= config.level and not wrote_to_file) then
+        vim.schedule(function()
+            vim.notify(formatted, level)
+        end)
     end
 end
 
 --- Log a debug message
---- @param msg string
+--- @param msg string|table
 function M.debug(msg)
     log_internal(msg, vim.log.levels.DEBUG)
 end
 
 --- Log an info message
---- @param msg string
+--- @param msg string|table
 function M.info(msg)
     log_internal(msg, vim.log.levels.INFO)
 end
 
 --- Log a warning message
---- @param msg string
+--- @param msg string|table
 function M.warn(msg)
     log_internal(msg, vim.log.levels.WARN)
 end
 
 --- Log an error message
---- @param msg string
+--- @param msg string|table
 function M.error(msg)
     log_internal(msg, vim.log.levels.ERROR)
 end
