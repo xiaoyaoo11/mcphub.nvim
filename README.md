@@ -26,10 +26,7 @@ Using [lazy.nvim](https://github.com/folke/lazy.nvim):
     dependencies = {
         "nvim-lua/plenary.nvim",  -- Required for HTTP requests
     },
-    build = function()
-        -- Install mcp-hub globally
-        vim.fn.system("npm install -g mcp-hub")
-    end,
+    build = "npm install -g mcp-hub@latest", -- Install specific version
     config = function()
         require("mcphub").setup({
             port = 3000,  -- Port for MCP Hub server
@@ -39,7 +36,13 @@ Using [lazy.nvim](https://github.com/folke/lazy.nvim):
                 to_file = false,  -- Whether to log to file
                 file_path = nil,  -- Log file path
                 prefix = "MCPHub"  -- Log message prefix
-            }
+            },
+            on_ready = function(hub)
+                -- Called when hub is ready
+            end,
+            on_error = function(err)
+                -- Called on errors
+            end
         })
     end
 }
@@ -47,22 +50,18 @@ Using [lazy.nvim](https://github.com/folke/lazy.nvim):
 
 ## Usage
 
-### For Chat Plugin Developers
+### For A Chat Plugin
 
 ```lua
 local mcphub = require("mcphub")
 
--- Setup plugin with logging
+-- Setup plugin with logging and callbacks
 mcphub.setup({
     port = 3000,
     config = vim.fn.expand("~/.config/mcp-hub/config.json"),
-})
-
--- Start server/connect
-mcphub.start_hub({
-    on_ready = function(hub_instance)
+    on_ready = function(hub)
         -- Ready to use MCP features
-        hub_instance:get_servers(function(servers)
+        hub:get_servers(function(servers)
             -- Use servers data
         end)
     end,
@@ -112,9 +111,6 @@ hub:get_server_info("server-name", function(server)
         -- Server not found
     end
 end)
-
--- Shutdown (optional, handled automatically on `VimLeavePre`)
--- mcphub.stop_hub()
 ```
 
 ## API Reference
@@ -281,7 +277,6 @@ end)
    - Test API endpoints directly with curl
 
 3. **Status Shows Not Ready**
-   - Call mcphub.start_hub()
    - Check server health
    - Verify connection state
    - Check error callbacks

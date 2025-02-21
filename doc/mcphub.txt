@@ -35,9 +35,7 @@ Using lazy.nvim: >
         dependencies = {
             "nvim-lua/plenary.nvim",
         },
-        build = function()
-            vim.fn.system("npm install -g mcp-hub")
-        end,
+        build = "npm install -g mcp-hub@latest",
         config = function()
             require("mcphub").setup({
                 port = 3000,
@@ -47,7 +45,13 @@ Using lazy.nvim: >
                     to_file = false,
                     file_path = nil,
                     prefix = "MCPHub"
-                }
+                },
+                on_ready = function(hub)
+                    -- Called when hub is ready
+                end,
+                on_error = function(err)
+                    -- Called on errors
+                end
             })
         end
     }
@@ -56,17 +60,13 @@ USAGE                                                   *mcphub-usage*
 
 API:                                                   *mcphub-api*
 >
-    -- Setup plugin with logging
+    -- Setup plugin with logging and callbacks
     require("mcphub").setup({
         port = 3000,
         config = vim.fn.expand("~/.config/mcp-hub/config.json"),
-    })
-
-    -- Start server/connect
-    require("mcphub").start_hub({
-        on_ready = function(hub_instance)
+        on_ready = function(hub)
             -- Ready to use MCP features
-            hub_instance:get_servers(function(servers)
+            hub:get_servers(function(servers)
                 -- Use servers data
             end)
         end,
@@ -75,7 +75,7 @@ API:                                                   *mcphub-api*
         end
     })
 
-    -- Get instance for API access
+    -- Get instance for API access (all methods are async)
     local hub = require("mcphub").get_hub_instance()
 <
 AVAILABLE METHODS                                       *mcphub-methods*
@@ -130,11 +130,11 @@ Connection Issues~
 - Monitor log output
 
 Status Shows Not Ready~
-- Call mcphub.start_hub()
 - Check server health
 - Verify connection state
 - Check error callbacks
-- Review logs
+- Review logs for startup sequence
+- Check API health endpoint
 
 ==============================================================================
  vim:tw=78:ts=8:ft=help:norl:
