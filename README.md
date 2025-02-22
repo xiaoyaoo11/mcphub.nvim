@@ -138,15 +138,12 @@ Each MCP Server information follows this schema:
     tools: Array<{
       name: string,
       description: string,
-      parameters: object // Tool-specific parameters
+      inputSchema: object // Tool-specific parameters
     }>,
     resources: Array<{
       uri: string,
-      type: string
-    }>,
-    resourceTemplates: Array<{
-      uriTemplate: string,
-      type: string
+      name: string,
+      mimeTime: string
     }>
   },
   uptime: number,    // Server uptime in seconds
