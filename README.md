@@ -11,7 +11,7 @@
 
 - Simple single-command interface (`:MCPHub`)
 - Automatic server lifecycle management
-- Async operations - no blocking
+- Both sync and async operations supported
 - Clean client registration/cleanup
 - Smart process handling
 - Configurable logging support
@@ -61,56 +61,125 @@ mcphub.setup({
     config = vim.fn.expand("~/.config/mcp-hub/config.json"),
     on_ready = function(hub)
         -- Ready to use MCP features
-        hub:get_servers(function(servers)
-            -- Use servers data
-        end)
+        -- Using async mode (non-blocking)
+        hub:get_servers({
+            callback = function(response, err)
+                if err then return end
+                local servers = response.servers -- Extract servers from response
+                -- Use servers data
+            end
+        })
+
+        -- Or using sync mode (blocking)
+        local response, err = hub:get_servers()
+        if not err then
+            local servers = response.servers -- Extract servers from response
+        end
     end,
     on_error = function(err)
         -- Error will be automatically logged
     end
 })
 
--- Get instance for API access (all methods are async)
+-- Get instance for API access
 local hub = mcphub.get_hub_instance()
 
--- Call a tool
+-- All methods support both sync and async modes and return raw responses:
+
+-- Async mode (non-blocking)
 hub:call_tool("server-name", "tool-name", {
     -- Tool arguments
-}, function(result, error)
-    if error then
-        -- Error will be automatically logged at appropriate level
-        return
+}, {
+    callback = function(response, error)
+        if error then
+            -- Error will be automatically logged at appropriate level
+            return
+        end
+        local result = response.result -- Extract result from response
+        -- Use tool result
     end
-    -- Use tool result
-end)
+})
 
--- Access resources
-hub:access_resource("server-name", "resource://uri", function(resource, error)
-    if error then
-        -- Error will be automatically logged
-        return
+-- Sync mode (blocking)
+local response, error = hub:call_tool("server-name", "tool-name", {
+    -- Tool arguments
+})
+if error then
+    -- Handle error
+    return
+end
+local result = response.result -- Extract result from response
+-- Use result
+
+-- Access resources (async)
+hub:access_resource("server-name", "resource://uri", {
+    callback = function(response, error)
+        if error then
+            -- Error will be automatically logged
+            return
+        end
+        local content = response.content -- Extract content from response
+        -- Use resource data
     end
-    -- Use resource data
-end)
+})
 
--- Get server status
-hub:get_status(function(status)
-    -- Use status information
-end)
+-- Access resources (sync)
+local response, error = hub:access_resource("server-name", "resource://uri")
+if error then
+    -- Handle error
+    return
+end
+local content = response.content -- Extract content from response
+-- Use resource data
 
--- Get available servers
-hub:get_servers(function(servers)
-    -- Use servers list
-end)
-
--- Get specific server info
-hub:get_server_info("server-name", function(server)
-    if server then
-        -- Server found
-    else
-        -- Server not found
+-- Get server status (async)
+hub:get_health({
+    callback = function(response, err)
+        if err then return end
+        -- Use raw response information
     end
-end)
+})
+
+-- Get server status (sync)
+local response, err = hub:get_health()
+if not err then
+    -- Use raw response
+end
+
+-- Get available servers (async)
+hub:get_servers({
+    callback = function(response, err)
+        if err then return end
+        local servers = response.servers -- Extract servers from response
+        -- Use servers list
+    end
+})
+
+-- Get available servers (sync)
+local response, err = hub:get_servers()
+if not err then
+    local servers = response.servers -- Extract servers from response
+end
+
+-- Get specific server info (async)
+hub:get_server_info("server-name", {
+    callback = function(response, err)
+        if err then return end
+        if response.server then -- Extract server from response
+            -- Server found
+        else
+            -- Server not found
+        end
+    end
+})
+
+-- Get specific server info (sync)
+local response, err = hub:get_server_info("server-name")
+if not err and response.server then -- Extract server from response
+    -- Server found
+else
+    -- Server not found
+end
 ```
 
 ## API Reference
@@ -170,7 +239,23 @@ Each MCP Server information follows this schema:
 }
 ```
 
-For development and debugging, you can directly query these endpoints.
+## API Reference
+
+```lua
+-- Server Management (all support both sync/async and return raw responses)
+hub:check_server(opts?)           -- callback(is_running: boolean) or returns boolean
+hub:get_health(opts?)            -- callback(response: table, error?: string) or returns table|nil, string|nil
+hub:get_servers(opts?)           -- callback(response: table, error?: string) or returns table|nil, string|nil
+hub:get_server_info(name, opts?) -- callback(response: table, error?: string) or returns table|nil, string|nil
+
+-- Tool/Resource Access (all support both sync/async and return raw responses)
+hub:call_tool(server, tool, args, opts?)      -- callback(response: table|nil, error?: string) or returns table|nil, string|nil
+hub:access_resource(server, uri, opts?)       -- callback(response: table|nil, error?: string) or returns table|nil, string|nil
+
+-- Health/Status
+hub:is_ready()        -- returns boolean (sync, safe to call)
+hub:display()         -- shows UI with current status
+```
 
 ## Architecture
 
@@ -184,7 +269,7 @@ The diagram above shows how multiple Neovim instances interact with a single MCP
 
 ![Request Flow](public/diagrams/request-flow.png)
 
-All operations are asynchronous, using callbacks to handle responses. This ensures Neovim stays responsive even during network operations. The diagram shows the request flow from initial startup to status display.
+Operations can be either synchronous (blocking) or asynchronous (using callbacks). The diagram shows the request flow from initial startup to status display.
 
 ### Cleanup Process
 
@@ -196,30 +281,12 @@ The cleanup process ensures proper resource management and server shutdown. It h
 
 ![API Flow](public/diagrams/api-interaction.png)
 
-All API interactions are asynchronous and follow this pattern:
+All API functions support both sync and async patterns:
 
-1. Check ready state
-2. Make request
-3. Handle response in callback
-4. Error handling in callback
-
-## Async API Reference
-
-```lua
--- Server Management
-hub:check_server(callback)           -- callback(is_running: boolean)
-hub:get_status(callback)            -- callback(status: table)
-hub:get_servers(callback)           -- callback(servers: table)
-hub:get_server_info(name, callback) -- callback(server: table|nil)
-
--- Tool/Resource Access
-hub:call_tool(server, tool, args, callback)      -- callback(result: table|nil, error?: string)
-hub:access_resource(server, uri, callback)       -- callback(result: table|nil, error?: string)
-
--- Health/Status
-hub:is_ready()        -- returns boolean (sync, safe to call)
-hub:display_status()  -- shows UI with current status
-```
+1. Sync: Direct return values (raw responses)
+2. Async: Handle response in callback
+3. Error handling in both modes
+4. State management carried through
 
 ## Logging Configuration
 
@@ -244,14 +311,26 @@ The plugin supports configurable logging with the following options:
 ## Error Handling
 
 ```lua
--- Example error handling pattern
-hub:call_tool("server", "tool", args, function(result, error)
-    if error then
-        -- Errors are automatically logged at appropriate levels
-        return
+-- Example error handling (async mode)
+hub:call_tool("server", "tool", args, {
+    callback = function(response, error)
+        if error then
+            -- Errors are automatically logged at appropriate levels
+            return
+        end
+        local result = response.result -- Extract result from response
+        -- Use result
     end
-    -- Use result
-end)
+})
+
+-- Example error handling (sync mode)
+local response, error = hub:call_tool("server", "tool", args)
+if error then
+    -- Handle error
+    return
+end
+local result = response.result -- Extract result from response
+-- Use result
 ```
 
 ## Troubleshooting

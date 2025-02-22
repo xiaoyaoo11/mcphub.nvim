@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2024-02-22
+
+### Added
+
+- Default timeouts for operations (1s for health checks, 30s for tool/resource access)
+- API tests for hub instance with examples
+- Enhanced error formatting in handlers for better readability
+
+### Changed
+
+- Updated error handling to use simpler string format
+- Added support for both sync/async API patterns across all operations
+- Improved response processing and error propagation
+
 ## [1.1.0] - 2024-02-21
 
 ### Added
