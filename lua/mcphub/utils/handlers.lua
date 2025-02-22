@@ -8,11 +8,12 @@ local M = {}
 --- @param data? table Additional error data
 --- @return string error Structured error object
 local function create_error(message, code, data)
-  return vim.inspect({
-    code = code,
-    message = message,
-    data = data or {}
-  })
+  -- return vim.inspect({
+  --   code = code,
+  --   message = message,
+  --   data = data or {}
+  -- })
+  return string.format("%s: %s", code, message)
 end
 
 --- Process handlers for server process management
