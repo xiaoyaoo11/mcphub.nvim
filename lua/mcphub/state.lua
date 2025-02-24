@@ -3,10 +3,11 @@
 --- Handles setup, server, and UI state
 ---@brief ]]
 ---@class MCPState
+local log = require("mcphub.utils.log")
+
 local State = {
     -- Setup state
     setup_state = "not_started",
-    setup_errors = {}, -- Array of setup related errors
 
     -- Core instances
     hub_instance = nil,
@@ -17,8 +18,15 @@ local State = {
         status = "disconnected", -- disconnected/connecting/connected
         pid = nil, -- Server process ID when running
         started_at = nil, -- When server was started
-        servers = {},
-        errors = {} -- Server-related errors
+        servers = {}
+    },
+
+    -- Error management
+    errors = {
+        setup = {}, -- Setup-time errors
+        server = {}, -- Server-related errors
+        runtime = {}, -- Runtime errors
+        _by_id = {} -- Quick lookup by error ID
     },
 
     -- Process streams
@@ -70,23 +78,79 @@ function State:update(partial_state, update_type)
     end
 end
 
-function State:add_error(error_obj)
-    local error = {
-        time = vim.loop.now(),
-        message = error_obj.message,
-        type = error_obj.type, -- 'setup', 'server', 'console'
-        details = error_obj.details
-    }
+--- Add an error to state and optionally log it
+---@param err MCPError The error to add
+---@param log_level? string Optional explicit log level (debug/info/warn/error)
+---@return string error_id The unique ID of the added error
+function State:add_error(err, log_level)
+    -- Generate unique error ID
+    err.id = vim.fn.sha256(vim.fn.json_encode({
+        type = err.type,
+        code = err.code,
+        message = err.message,
+        timestamp = err.timestamp
+    }))
 
-    if error_obj.type == "setup" then
-        table.insert(self.setup_errors, error)
-    elseif error_obj.type == "server" then
-        table.insert(self.server_state.errors, error)
-    end
+    -- Add to appropriate category
+    table.insert(self.errors[err.type:lower()], err)
+    self.errors._by_id[err.id] = err
 
+    -- Notify subscribers
     self:notify_subscribers({
         errors = true
-    }, error_obj.type)
+    }, err.type:lower())
+
+    -- Log with explicit level or infer from error type
+    if log_level then
+        log[log_level:lower()](tostring(err))
+    else
+        -- Default logging behavior based on error type
+        local level = err.type == "SETUP" and "error" or err.type == "SERVER" and "warn" or "info"
+        log[level](tostring(err))
+    end
+
+    return err.id
+end
+
+--- Clear errors of a specific type or all errors
+---@param type? string Optional error type to clear (setup/server/runtime)
+function State:clear_errors(type)
+    if type then
+        self.errors[type:lower()] = {}
+    else
+        for k, _ in pairs(self.errors) do
+            if k ~= "_by_id" then
+                self.errors[k] = {}
+            end
+        end
+        self.errors._by_id = {}
+    end
+    self:notify_subscribers({
+        errors = true
+    }, "all")
+end
+
+--- Get error by ID
+---@param id string Error ID
+---@return MCPError|nil
+function State:get_error(id)
+    return self.errors._by_id[id]
+end
+
+--- Get all errors of a specific type
+---@param type? string Optional error type (setup/server/runtime)
+---@return MCPError[]
+function State:get_errors(type)
+    if type then
+        return vim.deepcopy(self.errors[type:lower()] or {})
+    end
+    local all_errors = {}
+    for k, errors in pairs(self.errors) do
+        if k ~= "_by_id" then
+            vim.list_extend(all_errors, errors)
+        end
+    end
+    return all_errors
 end
 
 -- For raw server output (stdout/stderr)

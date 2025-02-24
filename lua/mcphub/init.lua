@@ -3,6 +3,8 @@ local log = require("mcphub.utils.log")
 local Job = require("plenary.job")
 local version = require("mcphub.version")
 local State = require("mcphub.state")
+local validation = require("mcphub.validation")
+local Error = require("mcphub.errors")
 
 local M = {}
 
@@ -24,7 +26,7 @@ local M = {}
 --- ```
 --- @brief ]]
 
---- Setup function to configure the plugin
+--- Setup MCPHub plugin with error handling and validation
 --- @param opts? { port?: number, config?: string, log?: table, on_ready?: fun(hub: MCPHub), on_error?: fun(err: string) }
 --[[
 Setup options:
@@ -44,13 +46,15 @@ function M.setup(opts)
         return State.hub_instance
     end
 
+    -- Update state to in_progress
     State:update({
         setup_state = "in_progress"
     }, "setup")
 
+    -- Set default options
     local config = vim.tbl_deep_extend("force", {
-        port = nil,
-        config = nil,
+        port = nil, -- Will be validated
+        config = nil, -- Will be validated
         log = {
             level = vim.log.levels.ERROR,
             to_file = false,
@@ -63,9 +67,22 @@ function M.setup(opts)
         end
     }, opts or {})
 
+    -- Set up logging first
     log.setup(config.log or {})
 
-    -- Create UI instance
+    -- Validate options
+    local valid, err = validation.validate_setup_opts(config)
+    if not valid then
+        -- Add error to state and invoke error callback
+        State:add_error(err)
+        State:update({
+            setup_state = "failed"
+        }, "setup")
+        config.on_error(tostring(err))
+        return nil
+    end
+
+    -- Create UI instance early
     State.ui_instance = require("mcphub.ui"):new()
 
     -- Create command early
@@ -73,7 +90,7 @@ function M.setup(opts)
         if State.ui_instance then
             State.ui_instance:toggle()
         else
-            log.error("UI not initialized")
+            State:add_error(Error("RUNTIME", Error.Types.RUNTIME.INVALID_STATE, "UI not initialized"))
         end
     end, {
         desc = "Toggle MCP Hub window"
@@ -99,42 +116,36 @@ function M.setup(opts)
         args = {"--version"},
         on_exit = vim.schedule_wrap(function(j, code)
             if code ~= 0 then
-                State:add_error({
-                    type = "setup",
-                    message = string.format("mcp-hub not found. Run 'npm install -g mcp-hub@%s'",
-                        version.REQUIRED_NODE_VERSION.string)
-                })
+                local err = Error("SETUP", Error.Types.SETUP.MISSING_DEPENDENCY, string.format(
+                    "mcp-hub not found. Run 'npm install -g mcp-hub@%s'", version.REQUIRED_NODE_VERSION.string))
+                State:add_error(err)
                 State:update({
                     setup_state = "failed"
                 }, "setup")
-                config.on_error(State.setup_errors[#State.setup_errors].message)
+                config.on_error(tostring(err))
                 return
             end
 
-            local ok, err = M.validate_version(j:result()[1])
-            if not ok then
-                State:add_error({
-                    type = "setup",
-                    message = err
-                })
+            -- Validate version
+            local version_result = validation.validate_version(j:result()[1])
+            if not version_result.ok then
+                State:add_error(version_result.error)
                 State:update({
                     setup_state = "failed"
                 }, "setup")
-                config.on_error(State.setup_errors[#State.setup_errors].message)
+                config.on_error(tostring(version_result.error))
                 return
             end
 
             -- Create hub instance
             local hub = MCPHub:new(config)
             if not hub then
-                State:add_error({
-                    type = "setup",
-                    message = "Failed to create MCPHub instance"
-                })
+                local err = Error("SETUP", Error.Types.SETUP.SERVER_START, "Failed to create MCPHub instance")
+                State:add_error(err)
                 State:update({
                     setup_state = "failed"
                 }, "setup")
-                config.on_error(State.setup_errors[#State.setup_errors].message)
+                config.on_error(tostring(err))
                 return
             end
 
@@ -149,38 +160,19 @@ function M.setup(opts)
             -- Start hub
             hub:start({
                 on_ready = config.on_ready,
-                on_error = config.on_error
+                on_error = function(err_msg)
+                    -- Create proper error object for server start errors
+                    local err = Error("SERVER", Error.Types.SERVER.CONNECTION, err_msg)
+                    State:add_error(err)
+                    if config.on_error then
+                        config.on_error(tostring(err))
+                    end
+                end
             })
         end)
     }):start()
 
     return State.hub_instance
-end
-
---- Helper to parse and validate version
---- @param ver_str string Version string to validate
---- @return boolean is_valid Version is valid and compatible
---- @return string|nil error_message Error message if invalid
-function M.validate_version(ver_str)
-    local major, minor, patch = ver_str:match("(%d+)%.(%d+)%.(%d+)")
-    if not major then
-        return false, "Invalid version format"
-    end
-
-    local current = {
-        major = tonumber(major),
-        minor = tonumber(minor),
-        patch = tonumber(patch)
-    }
-
-    local required = version.REQUIRED_NODE_VERSION
-    if current.major ~= required.major or current.minor < required.minor then
-        return false,
-            string.format("Incompatible mcp-hub version. Found %s, required %s\nRun 'npm install -g mcp-hub@%s'",
-                ver_str, required.string, required.string)
-    end
-
-    return true, nil
 end
 
 function M.get_hub_instance()

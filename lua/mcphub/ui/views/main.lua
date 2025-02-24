@@ -19,34 +19,11 @@ function MainView:new(ui)
     return setmetatable(instance, MainView)
 end
 
---- Format timestamp relative to now
----@param timestamp number Unix timestamp
----@return string
-local function format_relative_time(timestamp)
-    local now = vim.loop.now()
-    local diff = now - timestamp
-
-    if diff < 60000 then -- Less than a minute
-        return "just now"
-    elseif diff < 3600000 then -- Less than an hour
-        local mins = math.floor(diff / 60000)
-        return string.format("%d min%s ago", mins, mins > 1 and "s" or "")
-    elseif diff < 86400000 then -- Less than a day
-        local hours = math.floor(diff / 3600000)
-        return string.format("%d hour%s ago", hours, hours > 1 and "s" or "")
-    else -- Days
-        local days = math.floor(diff / 86400000)
-        return string.format("%d day%s ago", days, days > 1 and "s" or "")
-    end
-end
-
 function MainView:render()
     -- Get base header
     local lines = self:render_header()
     local width = self:get_width()
 
-    table.insert(lines, self:divider())
-    table.insert(lines, self:line())
     -- Show setup/server state
     if State.setup_state == "failed" then
         table.insert(lines, NuiLine():append("Setup Failed:", Text.highlights.error))
@@ -78,7 +55,7 @@ function MainView:render()
             -- end
             -- if State.server_state.started_at then
             --     table.insert(lines, Text.align_text(
-            --         string.format("Started: %s", format_relative_time(State.server_state.started_at)), width, "center"))
+            --         string.format("Started: %s", M.format_relative_time(State.server_state.started_at)), width, "center"))
             -- end
 
             -- Show servers if any
@@ -126,7 +103,7 @@ function MainView:render()
             --         line:append(err.message, Text.highlights.error)
             --         if err.time then
             --             line:append(" (", Text.highlights.muted)
-            --             line:append(format_relative_time(err.time), Text.highlights.muted)
+            --             line:append(M.format_relative_time(err.time), Text.highlights.muted)
             --             line:append(")", Text.highlights.muted)
             --         end
             --         table.insert(lines, line)
@@ -155,15 +132,6 @@ function MainView:render()
             end
         end
     end
-
-    -- Add section divider
-    -- table.insert(lines, NuiLine())
-    -- table.insert(lines, self:divider())
-    -- table.insert(lines, NuiLine())
-
-    -- Add help text at bottom
-    -- table.insert(lines, Text.align_text("Press:", width, "center", Text.highlights.muted))
-    -- table.insert(lines, Text.align_text("q - Close window", width, "center", Text.highlights.muted))
 
     return lines
 end

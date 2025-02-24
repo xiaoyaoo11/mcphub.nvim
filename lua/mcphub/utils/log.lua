@@ -70,7 +70,7 @@ local function write_to_file(formatted, level_str, level)
     return false
 end
 
-local State = require("mcphub.state")
+-- local State = require("mcphub.state")
 
 --- Internal logging function
 --- @param msg string|table Message or structured data
@@ -92,11 +92,11 @@ local function log_internal(msg, level)
     local wrote_to_file = write_to_file(formatted, level_str:upper(), level)
 
     -- Add to state
-    State:add_log(level_str, {
-        formatted = formatted,
-        raw = msg,
-        level = level
-    })
+    -- State:add_log(level_str, {
+    --     formatted = formatted,
+    --     raw = msg,
+    --     level = level
+    -- })
 
     -- Only notify if:
     -- 1. It's an error (always show errors) OR

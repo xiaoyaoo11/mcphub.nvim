@@ -233,9 +233,8 @@ Each MCP Server information follows this schema:
 
 ```typescript
 {
-  content: any,   // Resource content
-  type: string,   // Resource type
-  error?: string  // Error message if failed
+result : any,
+error?: string
 }
 ```
 
@@ -254,7 +253,6 @@ hub:access_resource(server, uri, opts?)       -- callback(response: table|nil, e
 
 -- Health/Status
 hub:is_ready()        -- returns boolean (sync, safe to call)
-hub:display()         -- shows UI with current status
 ```
 
 ## Architecture

@@ -40,11 +40,10 @@ end
 --- Render header for view
 --- @return NuiLine[] Header lines
 function View:render_header()
-    -- if self.ui.current_view == "main" then
-    --     return {}
-    -- end
-
-    return Text.render_header(self:get_width(), self.ui.current_view)
+    local lines = Text.render_header(self:get_width(), self.ui.current_view)
+    table.insert(lines, self:divider())
+    table.insert(lines, self:line())
+    return lines
 end
 
 --- Render view content

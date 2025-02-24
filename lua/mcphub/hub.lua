@@ -1,10 +1,10 @@
 local curl = require("plenary.curl")
 local Job = require("plenary.job")
 local log = require("mcphub.utils.log")
-local utils = require("mcphub.utils")
 local prompt_utils = require("mcphub.utils.prompt")
 local handlers = require("mcphub.utils.handlers")
 local State = require("mcphub.state")
+local Error = require("mcphub.errors")
 
 -- Default timeouts
 local QUICK_TIMEOUT = 1000 -- 1s for quick operations like health checks
@@ -23,18 +23,14 @@ local MCPHub = {}
 MCPHub.__index = MCPHub
 
 --- Create a new MCPHub instance
---- @param opts table
---- @return MCPHub|nil
+--- @param opts table Configuration options
+--- @return MCPHub Instance of MCPHub
 function MCPHub:new(opts)
     local self = setmetatable({}, MCPHub)
-    -- Validate options
-    local valid = utils.validate_opts(opts)
-    if not valid then
-        return nil
-    end
+
+    -- Set up instance fields
     self.port = opts.port
     self.config = opts.config
-    -- State fields
     self.ready = false
     self.server_job = nil
     self.is_owner = false -- Whether we started the server
@@ -92,13 +88,11 @@ function MCPHub:start(opts)
                         self:handle_server_ready(opts)
                     end,
                     on_error = function(msg)
-                        -- Console errors don't change server status
-                        State:add_error({
-                            type = "server",
-                            message = msg
-                        })
+                        -- Create proper error object for server errors
+                        local err = Error("SERVER", Error.Types.SERVER.CONNECTION, msg)
+                        State:add_error(err)
                         if opts.on_error then
-                            opts.on_error(msg)
+                            opts.on_error(tostring(err))
                         end
                     end
                 })
@@ -110,12 +104,10 @@ function MCPHub:start(opts)
                 -- Use same handler for stderr
                 handlers.ProcessHandlers.handle_output(data, {
                     on_error = function(msg)
-                        State:add_error({
-                            type = "server",
-                            message = msg
-                        })
+                        local err = Error("SERVER", Error.Types.SERVER.CONNECTION, msg)
+                        State:add_error(err)
                         if opts.on_error then
-                            opts.on_error(msg)
+                            opts.on_error(tostring(err))
                         end
                     end
                 })
@@ -123,15 +115,12 @@ function MCPHub:start(opts)
             on_exit = vim.schedule_wrap(function(j, code)
                 if code ~= 0 then
                     log.error("Server exited unexpectedly")
-                    State:add_error({
-                        type = "server",
-                        message = "Server exited unexpectedly",
-                        details = {
-                            exit_code = code
-                        }
+                    local err = Error("SERVER", Error.Types.SERVER.CONNECTION, "Server exited unexpectedly", {
+                        exit_code = code
                     })
+                    State:add_error(err)
                     if opts.on_error then
-                        opts.on_error("Server exited unexpectedly")
+                        opts.on_error(tostring(err))
                     end
                 end
 
@@ -170,13 +159,10 @@ function MCPHub:handle_server_ready(opts)
     self:get_health({
         callback = function(response, err)
             if err and self:is_ready() then
-                State:add_error({
-                    type = "server",
-                    message = "Health check failed",
-                    details = {
-                        error = err
-                    }
+                local health_err = Error("SERVER", Error.Types.SERVER.HEALTH_CHECK, "Health check failed", {
+                    error = err
                 })
+                State:add_error(health_err)
             else
                 State:update({
                     server_state = vim.tbl_extend("force", State.server_state, {
@@ -187,18 +173,14 @@ function MCPHub:handle_server_ready(opts)
 
             -- Register client
             self:register_client({
-                callback = function(response, err)
-                    if err then
-                        log.error("Client registration failed")
-                        State:add_error({
-                            type = "server",
-                            message = "Client registration failed",
-                            details = {
-                                error = err
-                            }
+                callback = function(response, reg_err)
+                    if reg_err then
+                        local err = Error("SERVER", Error.Types.SERVER.CONNECTION, "Client registration failed", {
+                            error = reg_err
                         })
+                        State:add_error(err)
                         if opts.on_error then
-                            opts.on_error("Client registration failed")
+                            opts.on_error(tostring(err))
                         end
                         return
                     end
@@ -214,15 +196,6 @@ end
 --- Check if server is running and handle connection
 --- @param callback? function Optional callback(is_running: boolean)
 --- @return boolean If no callback is provided, returns is_running
---[[
-Used to verify if server is running before starting a new one
-Returns true if:
-1. Server is already ready
-2. Health check succeeds and server is mcp-hub
-Returns false if:
-1. Health check fails
-2. Health check succeeds but server is not mcp-hub
---]]
 function MCPHub:check_server(callback)
     if self:is_ready() then
         if callback then
@@ -260,18 +233,6 @@ end
 
 --- Register client with server
 --- @param opts? { callback?: function } Optional callback(response: table|nil, error?: string)
---[[
-Register with running server to:
-1. Let server know about this client
-2. Get notifications about server events
-3. Keep track of active clients
-Response example:
-{
-  "clientId": "12345_1234567890_123",
-  "registered": true,
-  "activeClients": 3
-}
---]]
 function MCPHub:register_client(opts)
     return self:api_request("POST", "client/register", vim.tbl_extend("force", {
         body = {
@@ -298,25 +259,6 @@ end
 --- @param name string Server name
 --- @param opts? { callback?: function } Optional callback(response: table|nil, error?: string)
 --- @return table|nil, string|nil If no callback is provided, returns response and error
---[[
-Get detailed information about a specific server including:
-1. Server status and uptime
-2. Connected clients
-3. Available tools and resources
-4. Server-specific configuration
-Response example:
-{
-  "name": "sequential-thinking",
-  "status": "connected",
-  "uptime": 3600,
-  "lastStarted": "2025-02-23T04:36:09.881Z",
-  "clients": ["client1", "client2"],
-  "capabilities": {
-    "tools": [...],
-    "resources": [...]
-  }
-}
---]]
 function MCPHub:get_server_info(name, opts)
     return self:api_request("GET", string.format("servers/%s/info", name), opts)
 end
@@ -327,16 +269,6 @@ end
 --- @param args table
 --- @param opts? { callback?: function, timeout?: number } Optional callback(response: table|nil, error?: string) and timeout in ms (default 30s)
 --- @return table|nil, string|nil If no callback is provided, returns response and error
---[[
-Execute a tool on a server. The response content varies by tool:
-| Scenario            | Example Response                                              |
-|---------------------|--------------------------------------------------------------|
-| Text Output         | { "content": [{ "type": "text", "text": "Hello" }] }         |
-| Image Output        | { "content": [{ "type": "image", "data": "base64..." }] }    |
-| Text Resource       | { "content": [{ "type": "resource", "uri": "file.txt" }] }   |
-| Binary Resource     | { "content": [{ "type": "resource", "uri": "image.jpg" }] }  |
-| Error Case          | { "content": [], "isError": true }                           |
---]]
 function MCPHub:call_tool(server_name, tool_name, args, opts)
     return self:api_request("POST", string.format("servers/%s/tools", server_name), vim.tbl_extend("force", {
         timeout = TOOL_TIMEOUT,
@@ -352,15 +284,6 @@ end
 --- @param uri string
 --- @param opts? { callback?: function, timeout?: number } Optional callback(response: table|nil, error?: string) and timeout in ms (default 30s)
 --- @return table|nil, string|nil If no callback is provided, returns response and error
---[[
-Access a resource from a server. The response varies by resource type:
-| Resource Type | Example Response                                    |
-|--------------|---------------------------------------------------|
-| Text         | { "contents": [{ "uri": "file.txt", "text": "..." }] } |
-| Binary       | { "contents": [{ "uri": "img.jpg", "blob": "..." }] }  |
-| Multiple     | { "contents": [{ "uri": "1.txt" }, { "uri": "2.png" }] } |
-| Not Found    | { "contents": [] }                                    |
---]]
 function MCPHub:access_resource(server_name, uri, opts)
     return self:api_request("POST", string.format("servers/%s/resources", server_name), vim.tbl_extend("force", {
         timeout = RESOURCE_TIMEOUT,
@@ -395,16 +318,13 @@ function MCPHub:api_request(method, path, opts)
 
     -- Only skip ready check for health check
     if not opts.skip_ready_check and not self.ready and path ~= "health" then
-        local error = "MCP Hub not ready"
-        State:add_error({
-            type = "server",
-            message = error
-        })
+        local err = Error("SERVER", Error.Types.SERVER.INVALID_STATE, "MCP Hub not ready")
+        State:add_error(err)
         if callback then
-            callback(nil, error)
+            callback(nil, tostring(err))
             return
         else
-            return nil, error
+            return nil, tostring(err)
         end
     end
 
@@ -412,52 +332,43 @@ function MCPHub:api_request(method, path, opts)
     local function process_response(response)
         local curl_error = handlers.ResponseHandlers.handle_curl_error(response, request_opts)
         if curl_error then
-            State:add_error({
-                type = "server",
-                message = curl_error,
-                details = {
-                    request = request_opts
-                }
+            local err = Error("SERVER", Error.Types.SERVER.API_ERROR, curl_error, {
+                request = request_opts
             })
+            State:add_error(err)
             if callback then
-                callback(nil, curl_error)
+                callback(nil, tostring(err))
                 return
             else
-                return nil, curl_error
+                return nil, tostring(err)
             end
         end
 
         local http_error = handlers.ResponseHandlers.handle_http_error(response, request_opts)
         if http_error then
-            State:add_error({
-                type = "server",
-                message = http_error,
-                details = {
-                    request = request_opts
-                }
+            local err = Error("SERVER", Error.Types.SERVER.API_ERROR, http_error, {
+                request = request_opts
             })
+            State:add_error(err)
             if callback then
-                callback(nil, http_error)
+                callback(nil, tostring(err))
                 return
             else
-                return nil, http_error
+                return nil, tostring(err)
             end
         end
 
         local result, parse_error = handlers.ResponseHandlers.parse_json(response.body, request_opts)
         if parse_error then
-            State:add_error({
-                type = "server",
-                message = parse_error,
-                details = {
-                    request = request_opts
-                }
+            local err = Error("SERVER", Error.Types.SERVER.API_ERROR, parse_error, {
+                request = request_opts
             })
+            State:add_error(err)
             if callback then
-                callback(nil, parse_error)
+                callback(nil, tostring(err))
                 return
             else
-                return nil, parse_error
+                return nil, tostring(err)
             end
         end
 
@@ -479,16 +390,13 @@ function MCPHub:api_request(method, path, opts)
                     code = "NETWORK_ERROR",
                     request = request_opts
                 })
+                local mcp_err = Error("SERVER", Error.Types.SERVER.API_ERROR, error, {
+                    request = request_opts
+                })
                 if not self:is_ready() and path == "health" then
-                    callback(nil, error)
+                    callback(nil, tostring(mcp_err))
                 else
-                    State:add_error({
-                        type = "server",
-                        message = error,
-                        details = {
-                            request = request_opts
-                        }
-                    })
+                    State:add_error(mcp_err)
                 end
             end)
         }))
