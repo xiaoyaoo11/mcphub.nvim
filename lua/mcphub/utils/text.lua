@@ -1,4 +1,5 @@
---[[ Text utilities for MCPHub ]] local NuiText = require("mcphub.utils.nuitext")
+--[[ Text utilities for MCPHub ]] ---
+local NuiText = require("mcphub.utils.nuitext")
 local NuiLine = require("mcphub.utils.nuiline")
 local hl = require("mcphub.utils.highlights")
 
@@ -22,19 +23,16 @@ end
 ---@return NuiLine
 function M.create_button(label, shortcut, selected)
     local line = NuiLine()
-    -- Add left padding
-    line:append(" ")
     -- Start button group
     if selected then
         -- Selected button has full background
-        line:append(shortcut .. " " .. label, M.highlights.header_btn)
+        line:append(" " .. shortcut, M.highlights.header_btn_shortcut)
+        line:append(" " .. label .. " ", M.highlights.header_btn)
     else
         -- Unselected shows just shortcut highlighted
-        line:append(shortcut, M.highlights.header_shortcut)
-        line:append(" " .. label, M.highlights.header)
+        line:append(" " .. shortcut, M.highlights.header_shortcut)
+        line:append(" " .. label .. " ", M.highlights.header)
     end
-    -- Add right padding
-    line:append(" ")
     return line
 end
 
@@ -42,21 +40,13 @@ end
 ---@param width number Window width for centering
 ---@return NuiLine[]
 function M.render_logo(width)
-    local logo_lines =
-        {"╭─────────────────────────────────────────────────────────╮",
-         "│                      MCP HUB                            │",
-         "╰─────────────────────────────────────────────────────────╯",
-         "▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁",
-         "███╗   ███╗ ██████╗██████╗     ██╗  ██╗██╗   ██╗██████╗ ",
-         "████╗ ████║██╔════╝██╔══██╗    ██║  ██║██║   ██║██╔══██╗",
-         "██╔████╔██║██║     ██████╔╝    ███████║██║   ██║██████╔╝",
-         "██║╚██╔╝██║██║     ██╔═══╝     ██╔══██║██║   ██║██╔══██╗",
-         "██║ ╚═╝ ██║╚██████╗██║         ██║  ██║╚██████╔╝██████╔╝",
-         "╚═╝     ╚═╝ ╚═════╝╚═╝         ╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ",
-         "▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔"}
-
+    local logo_lines = ([[
+╔╦╗╔═╗╔═╗  ╦ ╦╦ ╦╔╗ 
+║║║║  ╠═╝  ╠═╣║ ║╠╩╗
+╩ ╩╚═╝╩    ╩ ╩╚═╝╚═╝
+]]):gmatch("[^\r\n]+")
     local lines = {}
-    for _, line in ipairs(logo_lines) do
+    for line in logo_lines do
         table.insert(lines, M.align_text(line, width, "center", M.highlights.title))
     end
     return lines
@@ -67,17 +57,20 @@ end
 ---@param current_view string Currently selected view
 ---@return NuiLine[]
 function M.render_header(width, current_view)
-    local lines = {}
-
+    local lines = M.render_logo(width)
     -- Title
-    table.insert(lines, M.align_text("MCP Hub", width, "center", M.highlights.title))
-    table.insert(lines, NuiLine())
+    -- table.insert(lines, M.align_text("MCP Hub", width, "center", M.highlights.title))
+    -- table.insert(lines, NuiLine())
 
     -- Create buttons line
     local buttons = NuiLine()
 
     -- Add buttons with proper padding
     local btn_list = {{
+        key = "H",
+        label = "Hub",
+        view = "main"
+    }, {
         key = "S",
         label = "Servers",
         view = "servers"
@@ -119,9 +112,9 @@ function M.render_header(width, current_view)
     end
 
     -- Add separator line
-    table.insert(lines, NuiLine())
-    table.insert(lines, M.align_text(string.rep("─", math.min(width - 4, 60)), width, "center", M.highlights.muted))
-    table.insert(lines, NuiLine())
+    -- table.insert(lines, NuiLine())
+    -- table.insert(lines, M.align_text(string.rep("─", math.min(width - 4, 60)), width, "center", M.highlights.muted))
+    -- table.insert(lines, NuiLine())
 
     return lines
 end

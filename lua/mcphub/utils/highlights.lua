@@ -5,6 +5,7 @@ M.groups = {
     title = "MCPHubTitle",
     header = "MCPHubHeader",
     header_btn = "MCPHubHeaderBtn",
+    header_btn_shortcut = "MCPHubHeaderBtnShortcut",
     header_shortcut = "MCPHubHeaderShortcut",
     error = "MCPHubError",
     warning = "MCPHubWarning",
@@ -20,8 +21,8 @@ function M.setup()
     local highlights = {
         -- Window elements
         [M.groups.window_normal] = {
-            bg = "NONE",
-            fg = "#d4d4d4" -- Light gray for normal text
+            bg = "#1a1b26",
+            fg = "#c0caf5"
         },
         [M.groups.window_border] = {
             bg = "NONE",
@@ -36,16 +37,21 @@ function M.setup()
             bold = true
         },
         [M.groups.header] = {
-            bg = "NONE",
+            bg = "#444444",
             fg = "#d4d4d4" -- Light gray for normal text
         },
         [M.groups.header_btn] = {
-            bg = "#555555",
-            fg = "#ffffff", -- White text on dark background
+            fg = "#222222",
+            bg = "#c792ea",
+            bold = true
+        },
+        [M.groups.header_btn_shortcut] = {
+            bg = "#c792ea",
+            fg = "#111111",
             bold = true
         },
         [M.groups.header_shortcut] = {
-            bg = "NONE",
+            bg = "#444444",
             fg = "#ff966c", -- Orange for shortcuts
             bold = true
         },

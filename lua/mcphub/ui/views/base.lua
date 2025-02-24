@@ -25,59 +25,26 @@ function View:get_width()
     return vim.api.nvim_win_get_width(self.ui.window)
 end
 
+-- Add divider
+function View:divider()
+    local width = self:get_width()
+    local divider = Text.align_text(string.rep("-", width - 4), width, "center", Text.highlights.muted)
+    return divider
+end
+
+function View:line()
+    local line = NuiLine():append(string.rep(" ", self:get_width()))
+    return line
+end
+
 --- Render header for view
 --- @return NuiLine[] Header lines
 function View:render_header()
-    if self.ui.current_view == "main" then
-        return {}
-    end
+    -- if self.ui.current_view == "main" then
+    --     return {}
+    -- end
 
     return Text.render_header(self:get_width(), self.ui.current_view)
-end
-
---- Set up view-specific keymaps
-function View:setup_keymaps()
-    local function map(key, action, desc)
-        vim.keymap.set('n', key, action, {
-            buffer = self.ui.buffer,
-            desc = desc,
-            nowait = true
-        })
-    end
-
-    -- Global navigation
-    map('S', function()
-        self.ui:switch_view('servers')
-    end, "Switch to Servers view")
-
-    map('T', function()
-        self.ui:switch_view('tools')
-    end, "Switch to Tools view")
-
-    map('R', function()
-        self.ui:switch_view('resources')
-    end, "Switch to Resources view")
-
-    map('C', function()
-        self.ui:switch_view('config')
-    end, "Switch to Config view")
-
-    map('L', function()
-        self.ui:switch_view('logs')
-    end, "Switch to Logs view")
-
-    map('?', function()
-        self.ui:switch_view('help')
-    end, "Switch to Help view")
-
-    map('<ESC>', function()
-        self.ui:switch_view('main')
-    end, "Return to Main view")
-
-    -- Close window
-    map('q', function()
-        self.ui:cleanup()
-    end, "Close window")
 end
 
 --- Render view content
@@ -113,18 +80,23 @@ function View:draw()
     -- Render each line with proper highlights
     for _, line in ipairs(lines) do
         if type(line) == "string" then
-            -- Convert plain strings to NuiLine
-            line = NuiLine():append(line)
+            -- split string into lines
+            local lines = vim.split(line, "\n")
+            for _, l in ipairs(lines) do
+                line = NuiLine():append(l)
+                line:render(buf, ns_id, line_idx)
+                line_idx = line_idx + 1
+            end
+        else
+            line:render(buf, ns_id, line_idx)
+            line_idx = line_idx + 1
         end
-        line:render(buf, ns_id, line_idx)
-        line_idx = line_idx + 1
     end
 
     -- Make buffer unmodifiable
+    vim.api.nvim_buf_set_option(buf, "wrap", true)
     vim.api.nvim_buf_set_option(buf, "modifiable", false)
 
-    -- Set up keymaps
-    self:setup_keymaps()
 end
 
 --- Handle buffer enter

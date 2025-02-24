@@ -90,6 +90,48 @@ function UI:init_views()
     self.current_view = "main"
 end
 
+--- Set up view-specific keymaps
+function UI:setup_keymaps()
+    local function map(key, action, desc)
+        vim.keymap.set('n', key, action, {
+            buffer = self.buffer,
+            desc = desc,
+            nowait = true
+        })
+    end
+
+    map('H', function()
+        self:switch_view('main')
+    end, "Switch to Home view")
+    -- Global navigation
+    map('S', function()
+        self:switch_view('servers')
+    end, "Switch to Servers view")
+
+    map('T', function()
+        self:switch_view('tools')
+    end, "Switch to Tools view")
+
+    map('R', function()
+        self:switch_view('resources')
+    end, "Switch to Resources view")
+
+    map('C', function()
+        self:switch_view('config')
+    end, "Switch to Config view")
+
+    map('L', function()
+        self:switch_view('logs')
+    end, "Switch to Logs view")
+
+    map('?', function()
+        self:switch_view('help')
+    end, "Switch to Help view")
+    -- Close window
+    map('q', function()
+        self:cleanup()
+    end, "Close window")
+end
 --- Create a new buffer for the UI
 ---@private
 function UI:create_buffer()
@@ -100,6 +142,10 @@ function UI:create_buffer()
     vim.api.nvim_buf_set_option(self.buffer, "modifiable", false)
     vim.api.nvim_buf_set_option(self.buffer, "bufhidden", "wipe")
     vim.api.nvim_buf_set_option(self.buffer, "filetype", "mcphub")
+    vim.api.nvim_buf_set_option(self.buffer, "wrap", true)
+
+    -- Set buffer mappings
+    self:setup_keymaps()
 
     return self.buffer
 end

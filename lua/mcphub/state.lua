@@ -17,6 +17,7 @@ local State = {
         status = "disconnected", -- disconnected/connecting/connected
         pid = nil, -- Server process ID when running
         started_at = nil, -- When server was started
+        servers = {},
         errors = {} -- Server-related errors
     },
 

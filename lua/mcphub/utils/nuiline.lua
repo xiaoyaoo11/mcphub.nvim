@@ -30,7 +30,7 @@ function Line:append(content, highlight)
         ---@cast block NuiText
         table.insert(self._texts, block)
     end
-    return block
+    return self
 end
 
 ---@return string

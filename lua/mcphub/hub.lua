@@ -169,7 +169,7 @@ function MCPHub:handle_server_ready(opts)
     -- update the state
     self:get_health({
         callback = function(response, err)
-            if err then
+            if err and self:is_ready() then
                 State:add_error({
                     type = "server",
                     message = "Health check failed",
@@ -479,14 +479,17 @@ function MCPHub:api_request(method, path, opts)
                     code = "NETWORK_ERROR",
                     request = request_opts
                 })
-                State:add_error({
-                    type = "server",
-                    message = error,
-                    details = {
-                        request = request_opts
-                    }
-                })
-                callback(nil, error)
+                if not self:is_ready() and path == "health" then
+                    callback(nil, error)
+                else
+                    State:add_error({
+                        type = "server",
+                        message = error,
+                        details = {
+                            request = request_opts
+                        }
+                    })
+                end
             end)
         }))
     else
