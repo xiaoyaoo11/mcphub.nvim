@@ -70,6 +70,8 @@ local function write_to_file(formatted, level_str, level)
     return false
 end
 
+local State = require("mcphub.state")
+
 --- Internal logging function
 --- @param msg string|table Message or structured data
 --- @param level number Log level
@@ -80,14 +82,21 @@ local function log_internal(msg, level)
     end
 
     local level_str = ({
-        [vim.log.levels.DEBUG] = "DEBUG",
-        [vim.log.levels.INFO] = "INFO",
-        [vim.log.levels.WARN] = "WARN",
-        [vim.log.levels.ERROR] = "ERROR"
-    })[level] or "UNKNOWN"
+        [vim.log.levels.DEBUG] = "debug",
+        [vim.log.levels.INFO] = "info",
+        [vim.log.levels.WARN] = "warn",
+        [vim.log.levels.ERROR] = "error"
+    })[level] or "unknown"
 
-    local formatted = format_message(msg, level_str)
-    local wrote_to_file = write_to_file(formatted, level_str, level)
+    local formatted = format_message(msg, level_str:upper())
+    local wrote_to_file = write_to_file(formatted, level_str:upper(), level)
+
+    -- Add to state
+    State:add_log(level_str, {
+        formatted = formatted,
+        raw = msg,
+        level = level
+    })
 
     -- Only notify if:
     -- 1. It's an error (always show errors) OR
