@@ -43,15 +43,7 @@ end
 --- Apply all registered keymaps
 function View:apply_keymaps()
     local buffer = self.ui.buffer
-
-    -- First clear any existing view-specific keymaps
-    for _, key in ipairs(self.active_keymaps) do
-        pcall(vim.keymap.del, 'n', key, {
-            buffer = buffer
-        })
-    end
-
-    self.active_keymaps = {}
+    self:clear_keymaps()
 
     -- Apply view's registered keymaps
     for key, map in pairs(self.keymaps) do
@@ -62,6 +54,15 @@ function View:apply_keymaps()
         })
         table.insert(self.active_keymaps, key)
     end
+end
+
+function View:clear_keymaps()
+    for _, key in ipairs(self.active_keymaps) do
+        pcall(vim.keymap.del, 'n', key, {
+            buffer = self.ui.buffer
+        })
+    end
+    self.active_keymaps = {} -- Clear the active keymaps array after deletion
 end
 
 --- Whether the view should show setup errors
@@ -180,8 +181,8 @@ function View:render_footer()
         if i > 1 then
             keys_line:append("  ", Text.highlights.muted)
         end
-        keys_line:append(key.key, Text.highlights.header_shortcut):append(" ", Text.highlights.muted):append(key.desc,
-            Text.highlights.muted)
+        keys_line:append(" " .. key.key .. " ", Text.highlights.header_shortcut):append(" ", Text.highlights.muted)
+            :append(key.desc, Text.highlights.muted)
     end
 
     table.insert(lines, Text.pad_line(keys_line))
@@ -229,6 +230,8 @@ function View:draw()
 
     -- Get content lines
     local lines = self:render()
+    -- Render footer
+    vim.list_extend(lines, self:render_footer())
 
     -- Render each line with proper highlights
     local line_idx = 1
@@ -249,18 +252,16 @@ function View:draw()
     vim.api.nvim_buf_set_option(buf, "wrap", true)
     vim.api.nvim_buf_set_option(buf, "modifiable", false)
 
-    -- Apply keymaps
-    self:apply_keymaps()
 end
 
 --- Handle buffer enter
 function View:on_enter()
-    -- Override in child views if needed
+    self:apply_keymaps()
 end
 
 --- Handle buffer leave
 function View:on_leave()
-    -- Override in child views if needed
+    self:clear_keymaps()
 end
 
 return View

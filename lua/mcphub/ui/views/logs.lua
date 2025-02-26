@@ -23,8 +23,47 @@ local view_state = {
 }
 
 function LogsView:new(ui)
-    local instance = View:new(ui, "logs") -- Create base view with name
-    return setmetatable(instance, LogsView)
+    local self = View:new(ui, "logs") -- Create base view with name
+    self.keymaps = {
+        ['<TAB>'] = {
+            action = function()
+                view_state.current_tab = view_state.current_tab == "server" and "plugin" or "server"
+                self:draw()
+            end,
+            desc = "Switch view"
+        },
+        ['a'] = {
+            action = function()
+                view_state.auto_scroll = not view_state.auto_scroll
+                vim.notify(string.format("Auto-scroll %s", view_state.auto_scroll and "enabled" or "disabled"))
+            end,
+            desc = "Toggle auto-scroll"
+        },
+        ['c'] = {
+            action = function()
+                if view_state.current_tab == "server" then
+                    State.output.stdout = {}
+                    State.output.stderr = {}
+                else
+                    State.logs = {
+                        debug = {},
+                        info = {},
+                        warn = {},
+                        error = {}
+                    }
+                end
+                self:draw()
+            end,
+            desc = "Clear logs"
+        },
+        ['r'] = {
+            action = function()
+                self:draw()
+            end,
+            desc = "Refresh view"
+        }
+    }
+    return setmetatable(self, LogsView)
 end
 
 -- Format timestamp
@@ -185,40 +224,6 @@ function LogsView:render_plugin_logs()
     return lines
 end
 
-function LogsView:render_help()
-    local lines = {}
-    table.insert(lines, Text.empty_line())
-    table.insert(lines, Text.section("Keys", {}, false)[1])
-
-    local help_items = {{
-        key = "<TAB>",
-        desc = "Switch view"
-    }, {
-        key = "a",
-        desc = "Toggle auto-scroll"
-    }, {
-        key = "c",
-        desc = "Clear logs"
-    }, {
-        key = "r",
-        desc = "Refresh view"
-    }, {
-        key = "<ESC>",
-        desc = "Return to main"
-    }, {
-        key = "q",
-        desc = "Close window"
-    }}
-
-    for _, item in ipairs(help_items) do
-        local line = NuiLine():append("  "):append(item.key, Text.highlights.header_shortcut):append(" - ",
-            Text.highlights.muted):append(item.desc, Text.highlights.muted)
-        table.insert(lines, Text.pad_line(line))
-    end
-
-    return lines
-end
-
 function LogsView:render()
     -- Get base header
     local lines = self:render_header()
@@ -234,53 +239,7 @@ function LogsView:render()
         vim.list_extend(lines, self:render_plugin_logs())
     end
 
-    -- Add help text
-    vim.list_extend(lines, self:render_help())
-
     return lines
-end
-
-function LogsView:on_enter()
-    -- Register view-specific keymaps
-    self:add_keymap('<TAB>', function()
-        view_state.current_tab = view_state.current_tab == "server" and "plugin" or "server"
-        self:draw()
-    end, "Switch view")
-
-    self:add_keymap('a', function()
-        view_state.auto_scroll = not view_state.auto_scroll
-        vim.notify(string.format("Auto-scroll %s", view_state.auto_scroll and "enabled" or "disabled"))
-    end, "Toggle auto-scroll")
-
-    self:add_keymap('c', function()
-        if view_state.current_tab == "server" then
-            State.output.stdout = {}
-            State.output.stderr = {}
-        else
-            State.logs = {
-                debug = {},
-                info = {},
-                warn = {},
-                error = {}
-            }
-        end
-        self:draw()
-    end, "Clear logs")
-
-    self:add_keymap('r', function()
-        self:draw()
-    end, "Refresh view")
-
-    -- Apply keymaps
-    View.on_enter(self)
-
-    -- Auto scroll to bottom on enter
-    if view_state.auto_scroll then
-        vim.schedule(function()
-            local last_line = vim.api.nvim_buf_line_count(self.ui.buffer)
-            vim.api.nvim_win_set_cursor(self.ui.window, {last_line, 0})
-        end)
-    end
 end
 
 return LogsView

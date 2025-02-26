@@ -15,8 +15,19 @@ local ServersView = setmetatable({}, {
 ServersView.__index = ServersView
 
 function ServersView:new(ui)
-    local instance = View:new(ui, "servers") -- Create base view with name
-    return setmetatable(instance, ServersView)
+    local self = View:new(ui, "servers") -- Create base view with name
+    self.keymaps = {
+        ['r'] = {
+            action = function()
+                if State.setup_state == "completed" and State.hub_instance then
+                    State.hub_instance:get_health()
+                end
+            end,
+            desc = "Refresh servers"
+        }
+    }
+
+    return setmetatable(self, ServersView)
 end
 
 -- Helper to format duration
@@ -170,43 +181,7 @@ function ServersView:render()
         end
     end
 
-    -- Add help section
-    table.insert(lines, Text.empty_line())
-    table.insert(lines, Text.section("Keys", {}, false)[1])
-
-    local help_items = {{
-        key = "<CR>",
-        desc = "View server details"
-    }, {
-        key = "r",
-        desc = "Refresh servers"
-    }, {
-        key = "<ESC>",
-        desc = "Return to main"
-    }, {
-        key = "q",
-        desc = "Close window"
-    }}
-
-    for _, item in ipairs(help_items) do
-        local line = NuiLine():append("  "):append(item.key, Text.highlights.header_shortcut):append(" - ",
-            Text.highlights.muted):append(item.desc, Text.highlights.muted)
-        table.insert(lines, Text.pad_line(line))
-    end
-
     return lines
-end
-
-function ServersView:on_enter()
-    -- Register view-specific keymaps
-    self:add_keymap('r', function()
-        if State.setup_state == "completed" and State.hub_instance then
-            State.hub_instance:get_health()
-        end
-    end, "Refresh servers")
-
-    -- Apply keymaps
-    View.on_enter(self)
 end
 
 return ServersView

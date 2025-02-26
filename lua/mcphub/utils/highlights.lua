@@ -7,6 +7,7 @@ M.groups = {
     header_btn = "MCPHubHeaderBtn",
     header_btn_shortcut = "MCPHubHeaderBtnShortcut",
     header_shortcut = "MCPHubHeaderShortcut",
+    keymap = "MCPHubKeymap",
     error = "MCPHubError",
     warning = "MCPHubWarning",
     info = "MCPHubInfo",
@@ -76,6 +77,10 @@ function M.setup()
         [M.groups.muted] = {
             bg = "NONE",
             fg = "#808080" -- Gray for muted text
+        },
+        [M.groups.keymap] = {
+            bg = "NONE",
+            fg = "#c0caf5" -- Light blue for keymaps
         }
     }
 

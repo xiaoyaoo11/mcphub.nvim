@@ -15,8 +15,20 @@ local ConfigView = setmetatable({}, {
 ConfigView.__index = ConfigView
 
 function ConfigView:new(ui)
-    local instance = View:new(ui, "config") -- Create base view with name
-    return setmetatable(instance, ConfigView)
+    local self = View:new(ui, "config") -- Create base view with name
+    self.keymaps = {
+        ["e"] = {
+            action = function()
+                if State.hub_instance and State.hub_instance.config then
+                    vim.cmd("edit " .. State.hub_instance.config)
+                else
+                    vim.notify("No configuration file available", vim.log.levels.ERROR)
+                end
+            end,
+            desc = "Edit config"
+        }
+    }
+    return setmetatable(self, ConfigView)
 end
 
 --- Render configuration for a single server
@@ -94,24 +106,7 @@ function ConfigView:render()
         table.insert(lines, Text.align_text("Configuration not loaded", width, "center", Text.highlights.warning))
     end
 
-    -- Add footer
-    vim.list_extend(lines, self:render_footer())
-
     return lines
-end
-
-function ConfigView:on_enter()
-    -- Add config-specific keymaps
-    self:add_keymap("e", function()
-        if State.hub_instance and State.hub_instance.config then
-            vim.cmd("edit " .. State.hub_instance.config)
-        else
-            vim.notify("No configuration file available", vim.log.levels.ERROR)
-        end
-    end, "Edit config")
-
-    -- Apply keymaps
-    View.on_enter(self)
 end
 
 return ConfigView

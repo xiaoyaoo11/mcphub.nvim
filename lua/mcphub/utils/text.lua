@@ -78,7 +78,7 @@ end
 ---@param highlight? string Optional highlight
 ---@return NuiLine
 function M.divider(width)
-    return M.pad_line(string.rep("─", width - (M.HORIZONTAL_PADDING * 2)), M.highlights.muted)
+    return M.pad_line(string.rep("-", width - (M.HORIZONTAL_PADDING * 2)), M.highlights.muted)
 end
 
 --- Align text with proper padding

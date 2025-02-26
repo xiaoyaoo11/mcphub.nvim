@@ -15,8 +15,17 @@ local MainView = setmetatable({}, {
 MainView.__index = MainView
 
 function MainView:new(ui)
-    local instance = View:new(ui, "main") -- Create base view with name
-    return setmetatable(instance, MainView)
+    local self = View:new(ui, "main") -- Create base view with name
+    self.keymaps = {
+        ["r"] = {
+            action = function()
+                -- State.refresh()
+                vim.notify("Refreshing server status")
+            end,
+            desc = "Refresh server status"
+        }
+    }
+    return setmetatable(self, MainView)
 end
 
 --- Render server status section
