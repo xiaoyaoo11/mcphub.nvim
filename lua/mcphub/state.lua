@@ -83,17 +83,8 @@ end
 ---@param log_level? string Optional explicit log level (debug/info/warn/error)
 ---@return string error_id The unique ID of the added error
 function State:add_error(err, log_level)
-    -- Generate unique error ID
-    err.id = vim.fn.sha256(vim.fn.json_encode({
-        type = err.type,
-        code = err.code,
-        message = err.message,
-        timestamp = err.timestamp
-    }))
-
     -- Add to appropriate category
     table.insert(self.errors[err.type:lower()], err)
-    self.errors._by_id[err.id] = err
 
     -- Notify subscribers
     self:notify_subscribers({

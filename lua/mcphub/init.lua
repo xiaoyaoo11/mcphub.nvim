@@ -70,18 +70,6 @@ function M.setup(opts)
     -- Set up logging first
     log.setup(config.log or {})
 
-    -- Validate options
-    local valid, err = validation.validate_setup_opts(config)
-    if not valid then
-        -- Add error to state and invoke error callback
-        State:add_error(err)
-        State:update({
-            setup_state = "failed"
-        }, "setup")
-        config.on_error(tostring(err))
-        return nil
-    end
-
     -- Create UI instance early
     State.ui_instance = require("mcphub.ui"):new()
 
@@ -95,6 +83,19 @@ function M.setup(opts)
     end, {
         desc = "Toggle MCP Hub window"
     })
+
+    -- Validate options
+    local validation_result = validation.validate_setup_opts(config)
+    if not validation_result.ok then
+        local err = validation_result.error
+        -- Add error to state and invoke error callback
+        State:add_error(err)
+        State:update({
+            setup_state = "failed"
+        }, "setup")
+        config.on_error(tostring(err))
+        return nil
+    end
 
     -- Setup cleanup
     local group = vim.api.nvim_create_augroup("mcphub_cleanup", {
@@ -160,14 +161,7 @@ function M.setup(opts)
             -- Start hub
             hub:start({
                 on_ready = config.on_ready,
-                on_error = function(err_msg)
-                    -- Create proper error object for server start errors
-                    local err = Error("SERVER", Error.Types.SERVER.CONNECTION, err_msg)
-                    State:add_error(err)
-                    if config.on_error then
-                        config.on_error(tostring(err))
-                    end
-                end
+                on_error = config.on_error
             })
         end)
     }):start()

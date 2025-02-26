@@ -3,14 +3,19 @@
 --- Handles window/buffer management and view system
 ---@brief ]]
 ---@class MCPHubUI
+local Text = require("mcphub.utils.text")
+local State = require("mcphub.state")
+local hl = require("mcphub.utils.highlights")
+
 local UI = {}
 UI.__index = UI
 
---- Constants for window sizing
-local WINDOW_WIDTH_RATIO = 0.8
-local WINDOW_HEIGHT_RATIO = 0.8
-
-local State = require("mcphub.state")
+-- Constants for window sizing and layout
+local WINDOW_CONSTANTS = {
+    WIDTH_RATIO = 0.8,
+    HEIGHT_RATIO = 0.8,
+    MIN_WIDTH = 40
+}
 
 --- Create a new UI instance
 ---@return MCPHubUI
@@ -27,13 +32,13 @@ function UI:new()
     instance:init_views()
 
     -- Subscribe to state changes
-    State:subscribe(function(state, changes)
+    State:subscribe(function(_, changes)
         -- Only update UI if window is visible and relevant state changed
         if instance.window and vim.api.nvim_win_is_valid(instance.window) then
             -- Check if we need to update
             local should_update = false
             for k, _ in pairs(changes) do
-                if k == "setup_state" or k == "server_state" or k == "logs" or k == "setup_errors" then
+                if k == "setup_state" or k == "server_state" or k == "logs" or k == "errors" then
                     should_update = true
                     break
                 end
@@ -81,9 +86,9 @@ function UI:init_views()
     self.views = {
         main = MainView:new(self),
         servers = require("mcphub.ui.views.servers"):new(self),
-        tools = require("mcphub.ui.views.tools"):new(self),
         logs = require("mcphub.ui.views.logs"):new(self),
-        help = require("mcphub.ui.views.help"):new(self)
+        help = require("mcphub.ui.views.help"):new(self),
+        config = require("mcphub.ui.views.config"):new(self)
     }
 
     -- Set initial view
@@ -100,21 +105,14 @@ function UI:setup_keymaps()
         })
     end
 
+    -- Global navigation
     map('H', function()
         self:switch_view('main')
     end, "Switch to Home view")
-    -- Global navigation
+
     map('S', function()
         self:switch_view('servers')
     end, "Switch to Servers view")
-
-    map('T', function()
-        self:switch_view('tools')
-    end, "Switch to Tools view")
-
-    map('R', function()
-        self:switch_view('resources')
-    end, "Switch to Resources view")
 
     map('C', function()
         self:switch_view('config')
@@ -127,11 +125,13 @@ function UI:setup_keymaps()
     map('?', function()
         self:switch_view('help')
     end, "Switch to Help view")
+
     -- Close window
     map('q', function()
         self:cleanup()
     end, "Close window")
 end
+
 --- Create a new buffer for the UI
 ---@private
 function UI:create_buffer()
@@ -157,9 +157,12 @@ function UI:create_window()
         self:create_buffer()
     end
 
-    -- Calculate dimensions
-    local width = math.floor(vim.o.columns * WINDOW_WIDTH_RATIO)
-    local height = math.floor(vim.o.lines * WINDOW_HEIGHT_RATIO)
+    -- Calculate dimensions with padding
+    local width = math.max(WINDOW_CONSTANTS.MIN_WIDTH, math.floor(vim.o.columns * WINDOW_CONSTANTS.WIDTH_RATIO))
+    -- Account for horizontal padding
+    width = width - (Text.HORIZONTAL_PADDING * 2)
+
+    local height = math.floor(vim.o.lines * WINDOW_CONSTANTS.HEIGHT_RATIO)
     local row = math.floor((vim.o.lines - height) / 2)
     local col = math.floor((vim.o.columns - width) / 2)
 
@@ -175,7 +178,6 @@ function UI:create_window()
     })
 
     -- Set up and apply window highlights 
-    local hl = require("mcphub.utils.highlights")
     hl.setup()
     vim.api.nvim_win_set_option(self.window, "winhl",
         "Normal:" .. hl.groups.window_normal .. ",FloatBorder:" .. hl.groups.window_border)
@@ -186,11 +188,11 @@ end
 --- Clean up resources
 ---@private
 function UI:cleanup()
-
     -- Leave current view if any
     if self.current_view and self.views[self.current_view] then
         self.views[self.current_view]:on_leave()
     end
+
     -- Clean up buffer if it exists
     if self.buffer and vim.api.nvim_buf_is_valid(self.buffer) then
         vim.api.nvim_buf_delete(self.buffer, {
@@ -204,7 +206,6 @@ function UI:cleanup()
         vim.api.nvim_win_close(self.window, true)
         self.window = nil
     end
-
 end
 
 --- Toggle UI visibility

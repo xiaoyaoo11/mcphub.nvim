@@ -4,6 +4,8 @@
 ---@brief ]]
 local State = require("mcphub.state")
 local View = require("mcphub.ui.views.base")
+local Text = require("mcphub.utils.text")
+local NuiLine = require("mcphub.utils.nuiline")
 
 ---@class LogsView
 ---@field super View
@@ -21,7 +23,7 @@ local view_state = {
 }
 
 function LogsView:new(ui)
-    local instance = View:new(ui) -- Create base view
+    local instance = View:new(ui, "logs") -- Create base view with name
     return setmetatable(instance, LogsView)
 end
 
@@ -30,36 +32,117 @@ local function format_time(timestamp)
     return os.date("%H:%M:%S", math.floor(timestamp / 1000))
 end
 
+--- Render tab selector
+---@param width number Window width
+---@return NuiLine[]
+function LogsView:render_tabs(width)
+    local lines = {}
+    local tabs = {{
+        id = "server",
+        label = "Server Output"
+    }, {
+        id = "plugin",
+        label = "Plugin Logs"
+    }}
+
+    local tab_line = NuiLine()
+    for i, tab in ipairs(tabs) do
+        if i > 1 then
+            tab_line:append("  ")
+        end
+
+        local is_active = view_state.current_tab == tab.id
+        tab_line:append("[")
+        tab_line:append(is_active and "x" or " ", is_active and Text.highlights.success or Text.highlights.muted)
+        tab_line:append("] " .. tab.label, is_active and Text.highlights.header or Text.highlights.muted)
+    end
+
+    table.insert(lines, Text.pad_line(tab_line))
+    table.insert(lines, Text.divider(width))
+    table.insert(lines, Text.empty_line())
+
+    return lines
+end
+
+-- Parse and format JSON server output
+local function format_server_log(data)
+    local ok, parsed = pcall(vim.json.decode, data)
+    if not ok then
+        return data
+    end
+
+    local type_icons = {
+        info = "● ",
+        warn = "⚠ ",
+        error = "✖ ",
+        debug = "◆ "
+    }
+
+    local type_hl = {
+        info = Text.highlights.info,
+        warn = Text.highlights.warning,
+        error = Text.highlights.error,
+        debug = Text.highlights.muted
+    }
+
+    -- Build log line
+    local line = NuiLine()
+    line:append(type_icons[parsed.type] or "• ", type_hl[parsed.type])
+    line:append(parsed.message, type_hl[parsed.type])
+
+    -- Add extra context if available
+    if parsed.data and not vim.tbl_isempty(parsed.data) then
+        local details = vim.split(vim.inspect(parsed.data), "\n")
+        if #details > 0 then
+            line:append(" (", Text.highlights.muted)
+            line:append(details[1]:gsub("^%s*{%s*(.-)%s*}%s*$", "%1"), Text.highlights.muted)
+            line:append(")", Text.highlights.muted)
+        end
+    end
+
+    return line
+end
+
 -- Render server output section
-local function render_server_output(lines)
-    table.insert(lines, "Server Output:")
+function LogsView:render_server_output()
+    local lines = {}
+    table.insert(lines, Text.section("Server Messages", {}, true)[1])
 
     -- Show stdout
     if #State.output.stdout > 0 then
         for _, entry in ipairs(State.output.stdout) do
             if entry.time and entry.data then
-                table.insert(lines, string.format("[%s] %s", format_time(entry.time), entry.data))
+                local log_line =
+                    NuiLine():append(string.format("[%s] ", format_time(entry.time)), Text.highlights.muted):append(
+                        format_server_log(entry.data))
+                table.insert(lines, Text.pad_line(log_line))
             end
         end
     else
-        table.insert(lines, "  No output available")
+        table.insert(lines, Text.pad_line("No output available", Text.highlights.muted))
     end
 
     -- Show stderr if any
     if #State.output.stderr > 0 then
-        table.insert(lines, "")
-        table.insert(lines, "Server Errors:")
+        table.insert(lines, Text.empty_line())
+        table.insert(lines, Text.section("Server Errors", {}, true)[1])
         for _, entry in ipairs(State.output.stderr) do
             if entry.time and entry.data then
-                table.insert(lines, string.format("[%s] %s", format_time(entry.time), entry.data))
+                local error_line = NuiLine():append(string.format("[%s] ", format_time(entry.time)),
+                    Text.highlights.muted):append("✖ ", Text.highlights.error):append(entry.data,
+                    Text.highlights.error)
+                table.insert(lines, Text.pad_line(error_line))
             end
         end
     end
+
+    return lines
 end
 
 -- Render plugin logs section
-local function render_plugin_logs(lines)
-    table.insert(lines, "Plugin Logs:")
+function LogsView:render_plugin_logs()
+    local lines = {}
+    table.insert(lines, Text.section("Plugin Logs", {}, true)[1])
 
     local has_logs = false
     -- Show logs by level, most severe first
@@ -71,101 +154,126 @@ local function render_plugin_logs(lines)
             for _, entry in ipairs(logs) do
                 if entry.time and entry.message then
                     -- Format based on message type
+                    local log_line = NuiLine():append(string.format("[%s] ", format_time(entry.time)),
+                        Text.highlights.muted):append(string.format("[%s] ", level:upper()), ({
+                        error = Text.highlights.error,
+                        warn = Text.highlights.warning,
+                        info = Text.highlights.info,
+                        debug = Text.highlights.muted
+                    })[level])
+
                     if type(entry.message) == "table" then
                         if entry.message.formatted then
-                            table.insert(lines, string.format("[%s] [%s] %s", format_time(entry.time), level:upper(),
-                                entry.message.formatted))
+                            log_line:append(entry.message.formatted)
                         else
-                            table.insert(lines, string.format("[%s] [%s] %s", format_time(entry.time), level:upper(),
-                                vim.inspect(entry.message.raw)))
+                            log_line:append(vim.inspect(entry.message.raw))
                         end
                     else
-                        table.insert(lines, string.format("[%s] [%s] %s", format_time(entry.time), level:upper(),
-                            tostring(entry.message)))
+                        log_line:append(tostring(entry.message))
                     end
+
+                    table.insert(lines, Text.pad_line(log_line))
                 end
             end
         end
     end
 
     if not has_logs then
-        table.insert(lines, "  No logs available")
+        table.insert(lines, Text.pad_line("No logs available", Text.highlights.muted))
     end
+
+    return lines
+end
+
+function LogsView:render_help()
+    local lines = {}
+    table.insert(lines, Text.empty_line())
+    table.insert(lines, Text.section("Keys", {}, false)[1])
+
+    local help_items = {{
+        key = "<TAB>",
+        desc = "Switch view"
+    }, {
+        key = "a",
+        desc = "Toggle auto-scroll"
+    }, {
+        key = "c",
+        desc = "Clear logs"
+    }, {
+        key = "r",
+        desc = "Refresh view"
+    }, {
+        key = "<ESC>",
+        desc = "Return to main"
+    }, {
+        key = "q",
+        desc = "Close window"
+    }}
+
+    for _, item in ipairs(help_items) do
+        local line = NuiLine():append("  "):append(item.key, Text.highlights.header_shortcut):append(" - ",
+            Text.highlights.muted):append(item.desc, Text.highlights.muted)
+        table.insert(lines, Text.pad_line(line))
+    end
+
+    return lines
 end
 
 function LogsView:render()
     -- Get base header
     local lines = self:render_header()
+    local width = self:get_width()
 
     -- Add tab selection
-    table.insert(lines,
-        string.format("[ %s ] %s  [ %s ] %s", view_state.current_tab == "server" and "x" or " ", "Server Output",
-            view_state.current_tab == "plugin" and "x" or " ", "Plugin Logs"))
-    table.insert(lines, string.rep("─", 50))
-    table.insert(lines, "")
+    vim.list_extend(lines, self:render_tabs(width))
 
     -- Show content based on selected tab
     if view_state.current_tab == "server" then
-        render_server_output(lines)
+        vim.list_extend(lines, self:render_server_output())
     else
-        render_plugin_logs(lines)
+        vim.list_extend(lines, self:render_plugin_logs())
     end
 
     -- Add help text
-    table.insert(lines, "")
-    table.insert(lines, "Press:")
-    table.insert(lines, " <TAB> - Switch view   a - Toggle auto-scroll")
-    table.insert(lines, " c - Clear logs        r - Refresh")
-    table.insert(lines, " <ESC> - Return to main view  q - Close window")
+    vim.list_extend(lines, self:render_help())
 
     return lines
 end
 
-function LogsView:setup_keymaps()
-    -- First set up the base view keymaps
-    View.setup_keymaps(self)
-
-    -- Add our own keymaps
-    local function map(key, action, desc)
-        vim.keymap.set('n', key, action, {
-            buffer = self.ui.buffer,
-            desc = desc,
-            nowait = true
-        })
-    end
-
-    -- Switch tabs
-    map('<TAB>', function()
+function LogsView:on_enter()
+    -- Register view-specific keymaps
+    self:add_keymap('<TAB>', function()
         view_state.current_tab = view_state.current_tab == "server" and "plugin" or "server"
-        self:render()
+        self:draw()
     end, "Switch view")
 
-    -- Toggle auto-scroll
-    map('a', function()
+    self:add_keymap('a', function()
         view_state.auto_scroll = not view_state.auto_scroll
         vim.notify(string.format("Auto-scroll %s", view_state.auto_scroll and "enabled" or "disabled"))
     end, "Toggle auto-scroll")
 
-    -- Clear logs
-    map('c', function()
+    self:add_keymap('c', function()
         if view_state.current_tab == "server" then
             State.output.stdout = {}
             State.output.stderr = {}
         else
-            for _, level in pairs(State.logs) do
-                level = {}
-            end
+            State.logs = {
+                debug = {},
+                info = {},
+                warn = {},
+                error = {}
+            }
         end
-        self:render()
+        self:draw()
     end, "Clear logs")
 
-    -- Refresh
-    map('r', function()
-        self:render()
+    self:add_keymap('r', function()
+        self:draw()
     end, "Refresh view")
-end
 
-function LogsView:on_enter()
+    -- Apply keymaps
+    View.on_enter(self)
+
     -- Auto scroll to bottom on enter
     if view_state.auto_scroll then
         vim.schedule(function()

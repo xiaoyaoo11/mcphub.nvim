@@ -79,51 +79,17 @@ function MCPHub:start(opts)
             command = "mcp-hub",
             args = {"--port", tostring(self.port), "--config", self.config},
             on_stdout = vim.schedule_wrap(function(_, data)
-                -- Add to state output
                 State:add_output("stdout", data)
-
-                -- Use unified handler for all server output
-                handlers.ProcessHandlers.handle_output(data, {
-                    on_ready = function()
-                        self:handle_server_ready(opts)
-                    end,
-                    on_error = function(msg)
-                        -- Create proper error object for server errors
-                        local err = Error("SERVER", Error.Types.SERVER.CONNECTION, msg)
-                        State:add_error(err)
-                        if opts.on_error then
-                            opts.on_error(tostring(err))
-                        end
-                    end
-                })
+                handlers.ProcessHandlers.handle_output(data, self, opts)
             end),
             on_stderr = vim.schedule_wrap(function(_, data)
-                -- Add to state output
                 State:add_output("stderr", data)
-
-                -- Use same handler for stderr
-                handlers.ProcessHandlers.handle_output(data, {
-                    on_error = function(msg)
-                        local err = Error("SERVER", Error.Types.SERVER.CONNECTION, msg)
-                        State:add_error(err)
-                        if opts.on_error then
-                            opts.on_error(tostring(err))
-                        end
-                    end
-                })
+                handlers.ProcessHandlers.handle_output(data, self, opts)
             end),
             on_exit = vim.schedule_wrap(function(j, code)
                 if code ~= 0 then
-                    log.error("Server exited unexpectedly")
-                    local err = Error("SERVER", Error.Types.SERVER.CONNECTION, "Server exited unexpectedly", {
-                        exit_code = code
-                    })
-                    State:add_error(err)
-                    if opts.on_error then
-                        opts.on_error(tostring(err))
-                    end
+                    self:handle_server_error("Server process exited with code " .. code, opts)
                 end
-
                 State:update({
                     server_state = {
                         status = "disconnected",
@@ -158,51 +124,63 @@ function MCPHub:handle_server_ready(opts)
     -- update the state
     self:get_health({
         callback = function(response, err)
-            if err and self:is_ready() then
-                local health_err = Error("SERVER", Error.Types.SERVER.HEALTH_CHECK, "Health check failed", {
-                    error = err
-                })
-                State:add_error(health_err)
+            if err then
+                if self:is_ready() then
+                    local health_err = Error("SERVER", Error.Types.SERVER.HEALTH_CHECK, "Health check failed", {
+                        error = err
+                    })
+                    State:add_error(health_err)
+                end
             else
                 State:update({
                     server_state = vim.tbl_extend("force", State.server_state, {
                         servers = response.servers or {}
                     })
                 }, "server")
-            end
 
-            -- Register client
-            self:register_client({
-                callback = function(response, reg_err)
-                    if reg_err then
-                        local err = Error("SERVER", Error.Types.SERVER.CONNECTION, "Client registration failed", {
-                            error = reg_err
-                        })
-                        State:add_error(err)
-                        if opts.on_error then
-                            opts.on_error(tostring(err))
+                -- Register client
+                self:register_client({
+                    callback = function(response, reg_err)
+                        if reg_err then
+                            local err = Error("SERVER", Error.Types.SERVER.CONNECTION, "Client registration failed", {
+                                error = reg_err
+                            })
+                            State:add_error(err)
+                            if opts.on_error then
+                                opts.on_error(tostring(err))
+                            end
+                            return
                         end
-                        return
+                        if opts.on_ready then
+                            opts.on_ready(self)
+                        end
                     end
-                    if opts.on_ready then
-                        opts.on_ready(self)
-                    end
-                end
-            })
+                })
+            end
         end
     })
+end
+
+function MCPHub:handle_server_error(msg, opts)
+    -- Create proper error object for server errors
+    if not self.is_shutting_down then -- Prevent error logging during shutdown
+        local err = Error("SERVER", Error.Types.SERVER.CONNECTION, msg)
+        State:add_error(err)
+        if opts.on_error then
+            opts.on_error(tostring(err))
+        end
+    end
 end
 
 --- Check if server is running and handle connection
 --- @param callback? function Optional callback(is_running: boolean)
 --- @return boolean If no callback is provided, returns is_running
 function MCPHub:check_server(callback)
+    log.debug("Checking Server")
     if self:is_ready() then
-        if callback then
-            callback(true)
-            return
-        end
-        return true
+        log.debug("hub is ready, no need to checkserver")
+        callback(true)
+        return
     end
 
     -- Quick health check
@@ -211,24 +189,18 @@ function MCPHub:check_server(callback)
         skip_ready_check = true
     }
 
-    if callback then
-        opts.callback = function(response, err)
-            if err then
-                log.debug("Health check: " .. err)
-                callback(false)
-                return
-            end
-            callback(response and response.server_id == "mcp-hub" and response.status == "ok")
+    opts.callback = function(response, err)
+        if err then
+            log.debug("Error while get health in check_server")
+            callback(false)
+        else
+            local is_hub_server = response and response.server_id == "mcp-hub" and response.status == "ok"
+            log.debug("Got health response in check_server, is_hub_server? " .. tostring(is_hub_server))
+            callback(is_hub_server)
         end
     end
 
-    local response, err = self:api_request("GET", "health", opts)
-    if not callback then
-        if err then
-            return false
-        end
-        return response and response.server_id == "mcp-hub" and response.status == "ok"
-    end
+    self:get_health(opts)
 end
 
 --- Register client with server
@@ -310,7 +282,19 @@ function MCPHub:api_request(method, path, opts)
         headers = {
             ["Content-Type"] = "application/json",
             ["Accept"] = "application/json"
-        }
+        },
+        on_error = vim.schedule_wrap(function(err)
+            log.debug(string.format("Error while making request to %s: %s", path, vim.inspect(err)))
+            local error = handlers.ResponseHandlers.process_error(err, {
+                code = "NETWORK_ERROR",
+                request = request_opts
+            })
+            if not self:is_ready() and path == "health" then
+                callback(nil, tostring(error))
+            else
+                State:add_error(error)
+            end
+        end)
     }
     if opts.body then
         request_opts.body = vim.fn.json_encode(opts.body)
@@ -332,43 +316,34 @@ function MCPHub:api_request(method, path, opts)
     local function process_response(response)
         local curl_error = handlers.ResponseHandlers.handle_curl_error(response, request_opts)
         if curl_error then
-            local err = Error("SERVER", Error.Types.SERVER.API_ERROR, curl_error, {
-                request = request_opts
-            })
-            State:add_error(err)
+            State:add_error(curl_error)
             if callback then
-                callback(nil, tostring(err))
+                callback(nil, tostring(curl_error))
                 return
             else
-                return nil, tostring(err)
+                return nil, tostring(curl_error)
             end
         end
 
         local http_error = handlers.ResponseHandlers.handle_http_error(response, request_opts)
         if http_error then
-            local err = Error("SERVER", Error.Types.SERVER.API_ERROR, http_error, {
-                request = request_opts
-            })
-            State:add_error(err)
+            State:add_error(http_error)
             if callback then
-                callback(nil, tostring(err))
+                callback(nil, tostring(http_error))
                 return
             else
-                return nil, tostring(err)
+                return nil, tostring(http_error)
             end
         end
 
         local result, parse_error = handlers.ResponseHandlers.parse_json(response.body, request_opts)
         if parse_error then
-            local err = Error("SERVER", Error.Types.SERVER.API_ERROR, parse_error, {
-                request = request_opts
-            })
-            State:add_error(err)
+            State:add_error(parse_error)
             if callback then
-                callback(nil, tostring(err))
+                callback(nil, tostring(parse_error))
                 return
             else
-                return nil, tostring(err)
+                return nil, tostring(parse_error)
             end
         end
 
@@ -384,20 +359,6 @@ function MCPHub:api_request(method, path, opts)
         curl.request(vim.tbl_extend("force", request_opts, {
             callback = vim.schedule_wrap(function(response)
                 process_response(response)
-            end),
-            on_error = vim.schedule_wrap(function(err)
-                local error = handlers.ResponseHandlers.process_error(err, {
-                    code = "NETWORK_ERROR",
-                    request = request_opts
-                })
-                local mcp_err = Error("SERVER", Error.Types.SERVER.API_ERROR, error, {
-                    request = request_opts
-                })
-                if not self:is_ready() and path == "health" then
-                    callback(nil, tostring(mcp_err))
-                else
-                    State:add_error(mcp_err)
-                end
             end)
         }))
     else

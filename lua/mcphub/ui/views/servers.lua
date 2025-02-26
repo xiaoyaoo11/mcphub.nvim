@@ -4,6 +4,8 @@
 ---@brief ]]
 local State = require("mcphub.state")
 local View = require("mcphub.ui.views.base")
+local Text = require("mcphub.utils.text")
+local NuiLine = require("mcphub.utils.nuiline")
 
 ---@class ServersView
 ---@field super View
@@ -13,7 +15,7 @@ local ServersView = setmetatable({}, {
 ServersView.__index = ServersView
 
 function ServersView:new(ui)
-    local instance = View:new(ui) -- Create base view
+    local instance = View:new(ui, "servers") -- Create base view with name
     return setmetatable(instance, ServersView)
 end
 
@@ -31,31 +33,60 @@ local function format_uptime(seconds)
 end
 
 --- Render server information
--- @param server table Server data
--- @param lines table Lines to append to
-local function render_server(server, lines)
-    -- Server header
-    table.insert(lines, string.format("╭─ %s (%s)", server.name, server.status))
+---@param server table Server data
+---@return NuiLine[] lines
+local function render_server(server)
+    local lines = {}
+
+    -- Server header with status icon
+    local status_icons = {
+        connected = "● ",
+        connecting = "◉ ",
+        disconnected = "○ "
+    }
+    local status_hl = {
+        connected = Text.highlights.success,
+        connecting = Text.highlights.info,
+        disconnected = Text.highlights.warning
+    }
+
+    -- Server title line
+    local title = NuiLine():append("╭─ ", Text.highlights.muted):append(status_icons[server.status] or "⚠ ",
+        status_hl[server.status] or Text.highlights.error):append(server.name, Text.highlights.header):append(" (",
+        Text.highlights.muted):append(server.status, status_hl[server.status] or Text.highlights.error):append(")",
+        Text.highlights.muted)
+    table.insert(lines, Text.pad_line(title))
 
     -- Server details
     if server.uptime then
-        table.insert(lines, string.format("│ Uptime: %s", format_uptime(server.uptime)))
+        local uptime = NuiLine():append("│ ", Text.highlights.muted):append("Uptime: ", Text.highlights.muted):append(
+            format_uptime(server.uptime), Text.highlights.info)
+        table.insert(lines, Text.pad_line(uptime))
     end
     if server.lastStarted then
-        table.insert(lines, string.format("│ Started: %s", server.lastStarted))
+        local started = NuiLine():append("│ ", Text.highlights.muted):append("Started: ", Text.highlights.muted)
+            :append(server.lastStarted, Text.highlights.info)
+        table.insert(lines, Text.pad_line(started))
     end
 
     -- Capabilities
     if server.capabilities then
         -- Tools
         if #server.capabilities.tools > 0 then
-            table.insert(lines, "│")
-            table.insert(lines, "│ Tools:")
+            table.insert(lines, Text.pad_line(NuiLine():append("│", Text.highlights.muted)))
+            table.insert(lines, Text.pad_line(NuiLine():append("│ Tools:", Text.highlights.header)))
             for _, tool in ipairs(server.capabilities.tools) do
-                table.insert(lines, string.format("│  • %s", tool.name))
+                -- Tool name
+                local tool_line = NuiLine():append("│  • ", Text.highlights.muted):append(tool.name,
+                    Text.highlights.success)
+                table.insert(lines, Text.pad_line(tool_line))
+
+                -- Tool description
                 if tool.description then
-                    for _, line in ipairs(vim.split(tool.description, "\n")) do
-                        table.insert(lines, string.format("│    %s", line))
+                    for _, desc_line in ipairs(Text.multiline(tool.description)) do
+                        local desc = NuiLine():append("│    ", Text.highlights.muted):append(desc_line,
+                            Text.highlights.muted)
+                        table.insert(lines, Text.pad_line(desc))
                     end
                 end
             end
@@ -63,92 +94,119 @@ local function render_server(server, lines)
 
         -- Resources
         if #server.capabilities.resources > 0 then
-            table.insert(lines, "│")
-            table.insert(lines, "│ Resources:")
+            table.insert(lines, Text.pad_line(NuiLine():append("│", Text.highlights.muted)))
+            table.insert(lines, Text.pad_line(NuiLine():append("│ Resources:", Text.highlights.header)))
             for _, resource in ipairs(server.capabilities.resources) do
-                table.insert(lines, string.format("│  • %s (%s)", resource.name, resource.mimeType))
+                local res_line = NuiLine():append("│  • ", Text.highlights.muted):append(resource.name,
+                    Text.highlights.success):append(" (", Text.highlights.muted):append(resource.mimeType,
+                    Text.highlights.info):append(")", Text.highlights.muted)
+                table.insert(lines, Text.pad_line(res_line))
             end
         end
     end
 
     -- Server footer
-    table.insert(lines, "╰─")
-    table.insert(lines, "")
-end
-
-function ServersView:render()
-    -- Get base header
-    local lines = self:render_header()
-
-    -- Add servers section
-    if State.setup_state == "failed" then
-        table.insert(lines, "Setup Failed:")
-        for _, err in ipairs(State.setup_errors) do
-            table.insert(lines, string.format("• %s", err.message))
-        end
-    elseif State.setup_state == "in_progress" then
-        table.insert(lines, "Setting up MCPHub...")
-    else
-        if State.server_state.status == "connected" then
-            if State.server_state.servers and #State.server_state.servers > 0 then
-                for _, server in ipairs(State.server_state.servers) do
-                    render_server(server, lines)
-                end
-            else
-                table.insert(lines, "No servers connected")
-            end
-
-            -- Show recent errors if any
-            if #State.server_state.errors > 0 then
-                table.insert(lines, "")
-                table.insert(lines, "Recent Server Issues:")
-                -- Show last 3 errors
-                for i = #State.server_state.errors, math.max(1, #State.server_state.errors - 2), -1 do
-                    local err = State.server_state.errors[i]
-                    table.insert(lines, string.format("• %s", err.message))
-                end
-            end
-        elseif State.server_state.status == "connecting" then
-            table.insert(lines, "Connecting to server...")
-        else
-            table.insert(lines, "Server disconnected")
-            if #State.server_state.errors > 0 then
-                table.insert(lines, "")
-                table.insert(lines, "Server Errors:")
-                local err = State.server_state.errors[#State.server_state.errors]
-                table.insert(lines, string.format("• %s", err.message))
-            end
-        end
-    end
-
-    -- Add help text
-    table.insert(lines, "")
-    table.insert(lines, "Press:")
-    table.insert(lines, " <CR> - View server details   r - Refresh")
-    table.insert(lines, " <ESC> - Return to main view  q - Close window")
+    table.insert(lines, Text.pad_line(NuiLine():append("╰─", Text.highlights.muted)))
+    table.insert(lines, Text.empty_line())
 
     return lines
 end
 
-function ServersView:setup_keymaps()
-    -- First set up the base view keymaps
-    View.setup_keymaps(self)
-
-    -- Add our own keymaps
-    local function map(key, action, desc)
-        vim.keymap.set('n', key, action, {
-            buffer = self.ui.buffer,
-            desc = desc,
-            nowait = true
-        })
+function ServersView:render()
+    -- Handle special states from base view
+    if State.setup_state == "failed" or State.setup_state == "in_progress" then
+        return View.render(self)
     end
 
-    -- Refresh server status
-    map('r', function()
-        if State.hub_instance then
+    -- Get base header
+    local lines = self:render_header()
+    local width = self:get_width()
+    -- Add servers section based on state
+    if State.server_state.status == "connected" then
+        if State.server_state.servers and #State.server_state.servers > 0 then
+            for _, server in ipairs(State.server_state.servers) do
+                vim.list_extend(lines, render_server(server))
+            end
+        else
+            table.insert(lines, Text.align_text("No servers connected", width, "center", Text.highlights.muted))
+        end
+
+        -- Show recent errors if any
+        if #State.errors.server > 0 then
+            table.insert(lines, Text.empty_line())
+            table.insert(lines, Text.section("Recent Issues", {}, true)[1])
+
+            -- Show last 3 errors
+            for i = #State.errors.server, math.max(1, #State.errors.server - 2), -1 do
+                local err = State.errors.server[i]
+                local error_line = NuiLine():append("• ", Text.highlights.error):append(err.message,
+                    Text.highlights.error)
+                table.insert(lines, Text.pad_line(error_line))
+
+                -- Add error details if any
+                if err.details then
+                    local details = vim.split(vim.inspect(err.details), "\n")
+                    for _, detail in ipairs(details) do
+                        local detail_line = NuiLine():append("  "):append(detail, Text.highlights.muted)
+                        table.insert(lines, Text.pad_line(detail_line))
+                    end
+                end
+            end
+        end
+    else
+        -- Show offline state
+        table.insert(lines,
+            Text.align_text(
+                State.server_state.status == "connecting" and "Connecting to server..." or "Server disconnected", width,
+                "center", State.server_state.status == "connecting" and Text.highlights.info or Text.highlights.warning))
+
+        -- Show error if disconnected
+        if State.server_state.status == "disconnected" and #State.errors.server > 0 then
+            local err = State.errors.server[#State.errors.server]
+            local error_line = NuiLine():append("• ", Text.highlights.error)
+                :append(err.message, Text.highlights.error)
+            table.insert(lines, Text.empty_line())
+            table.insert(lines, Text.pad_line(error_line))
+        end
+    end
+
+    -- Add help section
+    table.insert(lines, Text.empty_line())
+    table.insert(lines, Text.section("Keys", {}, false)[1])
+
+    local help_items = {{
+        key = "<CR>",
+        desc = "View server details"
+    }, {
+        key = "r",
+        desc = "Refresh servers"
+    }, {
+        key = "<ESC>",
+        desc = "Return to main"
+    }, {
+        key = "q",
+        desc = "Close window"
+    }}
+
+    for _, item in ipairs(help_items) do
+        local line = NuiLine():append("  "):append(item.key, Text.highlights.header_shortcut):append(" - ",
+            Text.highlights.muted):append(item.desc, Text.highlights.muted)
+        table.insert(lines, Text.pad_line(line))
+    end
+
+    return lines
+end
+
+function ServersView:on_enter()
+    -- Register view-specific keymaps
+    self:add_keymap('r', function()
+        if State.setup_state == "completed" and State.hub_instance then
             State.hub_instance:get_health()
         end
     end, "Refresh servers")
+
+    -- Apply keymaps
+    View.on_enter(self)
 end
 
 return ServersView

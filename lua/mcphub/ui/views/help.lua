@@ -1,9 +1,10 @@
 ---@brief [[
 --- Help view for MCPHub UI
---- Shows keyboard shortcuts and documentation
+--- Shows plugin documentation and keybindings
 ---@brief ]]
-local State = require("mcphub.state")
 local View = require("mcphub.ui.views.base")
+local Text = require("mcphub.utils.text")
+local NuiLine = require("mcphub.utils.nuiline")
 
 ---@class HelpView
 ---@field super View
@@ -13,153 +14,161 @@ local HelpView = setmetatable({}, {
 HelpView.__index = HelpView
 
 function HelpView:new(ui)
-    local instance = View:new(ui) -- Create base view
+    local instance = View:new(ui, "help") -- Create base view with name
     return setmetatable(instance, HelpView)
 end
 
--- Basic navigation
-local BASIC_COMMANDS = {{
-    key = "q",
-    desc = "Close window"
-}, {
-    key = "<ESC>",
-    desc = "Return to main view"
-}, {
-    key = "S",
-    desc = "Switch to servers view"
-}, {
-    key = "T",
-    desc = "Switch to tools view"
-}, {
-    key = "R",
-    desc = "Switch to resources view"
-}, {
-    key = "L",
-    desc = "Switch to logs view"
-}, {
-    key = "?",
-    desc = "Show this help"
-}}
+function HelpView:render_about()
+    local lines = {}
+    table.insert(lines, Text.section("About MCP Hub", {}, true)[1])
 
--- View-specific commands
-local VIEW_COMMANDS = {
-    servers = {{
-        key = "r",
-        desc = "Refresh server status"
-    }},
-    tools = {{
-        key = "1-9",
-        desc = "Select server/tool"
+    local about_text = [[
+MCP Hub is a Neovim plugin for interacting with MCP (Model Context Protocol) servers.
+It provides a central interface for managing multiple MCP servers and monitoring their
+status and communication.
+
+For more information, visit:
+https://github.com/ravitemer/mcphub.nvim
+]]
+
+    for _, line in ipairs(Text.multiline(about_text, Text.highlights.muted)) do
+        table.insert(lines, Text.pad_line(line))
+    end
+
+    table.insert(lines, Text.empty_line())
+    return lines
+end
+
+function HelpView:render_navigation()
+    local lines = {}
+    table.insert(lines, Text.section("Navigation", {}, true)[1])
+
+    local nav_items = {{
+        key = "H",
+        desc = "Home view - Overview and server status"
     }, {
-        key = "<BS>",
-        desc = "Go back to previous selection"
+        key = "S",
+        desc = "Servers view - Server details and status"
     }, {
-        key = "<CR>",
-        desc = "Execute selected tool"
+        key = "C",
+        desc = "Config view - Server configuration"
     }, {
-        key = "r",
-        desc = "Refresh available tools"
-    }},
-    logs = {{
-        key = "<TAB>",
-        desc = "Switch between server/plugin logs"
+        key = "L",
+        desc = "Logs view - Server and plugin logs"
     }, {
-        key = "a",
-        desc = "Toggle auto-scroll"
+        key = "?",
+        desc = "Help view - This help page"
     }, {
-        key = "c",
-        desc = "Clear current log"
-    }, {
-        key = "r",
-        desc = "Refresh logs"
+        key = "q",
+        desc = "Close window"
     }}
-}
 
--- Section divider
-local function add_section(lines, title)
-    table.insert(lines, "")
-    table.insert(lines, title .. ":")
-    table.insert(lines, string.rep("─", #title + 1))
+    for _, item in ipairs(nav_items) do
+        local line = NuiLine():append(item.key, Text.highlights.header_shortcut):append(" - ", Text.highlights.muted)
+            :append(item.desc, Text.highlights.muted)
+        table.insert(lines, Text.pad_line(line))
+    end
+
+    table.insert(lines, Text.empty_line())
+    return lines
+end
+
+function HelpView:render_view_keys()
+    local lines = {}
+    table.insert(lines, Text.section("View-Specific Keys", {}, true)[1])
+
+    local view_keys = {{
+        name = "Main View",
+        keys = {{
+            key = "r",
+            desc = "Restart server"
+        }, {
+            key = "s",
+            desc = "Stop server"
+        }, {
+            key = "<CR>",
+            desc = "Retry setup (if failed)"
+        }}
+    }, {
+        name = "Servers View",
+        keys = {{
+            key = "r",
+            desc = "Refresh servers"
+        }}
+    }, {
+        name = "Logs View",
+        keys = {{
+            key = "<TAB>",
+            desc = "Switch log type"
+        }, {
+            key = "a",
+            desc = "Toggle auto-scroll"
+        }, {
+            key = "c",
+            desc = "Clear logs"
+        }, {
+            key = "r",
+            desc = "Refresh view"
+        }}
+    }, {
+        name = "Config View",
+        keys = {{
+            key = "e",
+            desc = "Edit configuration"
+        }}
+    }}
+
+    for _, section in ipairs(view_keys) do
+        -- Section name
+        local name_line = NuiLine():append(section.name .. ":", Text.highlights.header)
+        table.insert(lines, Text.pad_line(name_line))
+
+        -- Keys
+        for _, key in ipairs(section.keys) do
+            local key_line = NuiLine():append("  "):append(key.key, Text.highlights.header_shortcut):append(" - ",
+                Text.highlights.muted):append(key.desc, Text.highlights.muted)
+            table.insert(lines, Text.pad_line(key_line))
+        end
+        table.insert(lines, Text.empty_line())
+    end
+
+    return lines
+end
+
+function HelpView:render_troubleshooting()
+    local lines = {}
+    table.insert(lines, Text.section("Troubleshooting", {}, true)[1])
+
+    local help_text = [[
+Common Issues:
+• Server not connecting - Check if mcp-hub is installed globally
+• Invalid config - Verify your config file format
+• Version mismatch - Update mcp-hub to required version
+
+For more help:
+• Check server logs in the Logs view (L)
+• View configuration in Config view (C)
+• Visit the GitHub repository for documentation
+
+If problems persist, please report issues on GitHub.
+]]
+
+    for _, line in ipairs(Text.multiline(help_text, Text.highlights.muted)) do
+        table.insert(lines, Text.pad_line(line))
+    end
+
+    return lines
 end
 
 function HelpView:render()
     -- Get base header
     local lines = self:render_header()
 
-    -- Introduction
-    table.insert(lines, "MCPHub Help")
-    table.insert(lines, "")
-    table.insert(lines, "MCPHub provides a UI for managing and interacting with MCP servers.")
-    table.insert(lines, "The interface is divided into several views, each focusing on")
-    table.insert(lines, "different aspects of server management.")
-
-    -- Basic Navigation
-    add_section(lines, "Basic Navigation")
-    local max_key_len = 0
-    for _, cmd in ipairs(BASIC_COMMANDS) do
-        max_key_len = math.max(max_key_len, #cmd.key)
-    end
-    for _, cmd in ipairs(BASIC_COMMANDS) do
-        table.insert(lines, string.format(" %s%s - %s", cmd.key, string.rep(" ", max_key_len - #cmd.key), cmd.desc))
-    end
-
-    -- Views Documentation
-    add_section(lines, "Views")
-
-    -- Main View
-    table.insert(lines, "Main:")
-    table.insert(lines, "  Displays server status, connected servers, and recent errors.")
-    table.insert(lines, "  This is the default view when opening MCPHub.")
-
-    -- Servers View
-    table.insert(lines, "")
-    table.insert(lines, "Servers:")
-    table.insert(lines, "  Shows detailed information about connected servers including")
-    table.insert(lines, "  uptime, capabilities, and available tools/resources.")
-    for _, cmd in ipairs(VIEW_COMMANDS.servers) do
-        table.insert(lines, string.format("  %s - %s", cmd.key, cmd.desc))
-    end
-
-    -- Tools View
-    table.insert(lines, "")
-    table.insert(lines, "Tools:")
-    table.insert(lines, "  Allows selecting and executing server-provided tools.")
-    table.insert(lines, "  Shows tool descriptions and input parameters.")
-    for _, cmd in ipairs(VIEW_COMMANDS.tools) do
-        table.insert(lines, string.format("  %s - %s", cmd.key, cmd.desc))
-    end
-
-    -- Logs View
-    table.insert(lines, "")
-    table.insert(lines, "Logs:")
-    table.insert(lines, "  Displays server output and plugin logs with timestamps.")
-    table.insert(lines, "  Supports auto-scrolling and log clearing.")
-    for _, cmd in ipairs(VIEW_COMMANDS.logs) do
-        table.insert(lines, string.format("  %s - %s", cmd.key, cmd.desc))
-    end
-
-    -- Additional Information
-    add_section(lines, "Additional Information")
-    table.insert(lines, "For more detailed documentation and examples, visit:")
-    table.insert(lines, "https://github.com/username/mcphub.nvim")
-
-    -- Error Reporting
-    add_section(lines, "Error Reporting")
-    table.insert(lines, "If you encounter any issues, please report them at:")
-    table.insert(lines, "https://github.com/username/mcphub.nvim/issues")
-
-    -- Server information
-    if State.server_state.status == "connected" then
-        add_section(lines, "Current Server")
-        table.insert(lines, string.format("Status: %s", State.server_state.status))
-        if State.server_state.pid then
-            table.insert(lines, string.format("PID: %d", State.server_state.pid))
-        end
-        if State.server_state.started_at then
-            table.insert(lines, string.format("Started: %s", os.date("%Y-%m-%d %H:%M:%S",
-                math.floor(State.server_state.started_at / 1000))))
-        end
-    end
+    -- Add help sections
+    vim.list_extend(lines, self:render_about())
+    vim.list_extend(lines, self:render_navigation())
+    vim.list_extend(lines, self:render_view_keys())
+    vim.list_extend(lines, self:render_troubleshooting())
 
     return lines
 end

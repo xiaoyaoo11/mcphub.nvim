@@ -1,20 +1,96 @@
---[[ Text utilities for MCPHub ]] ---
+---@brief [[
+--- Text utilities for MCPHub
+--- Provides text formatting, layout, and rendering utilities
+---@brief ]]
 local NuiText = require("mcphub.utils.nuitext")
 local NuiLine = require("mcphub.utils.nuiline")
 local hl = require("mcphub.utils.highlights")
 
 local M = {}
 
+-- Constants
+M.HORIZONTAL_PADDING = 2
+
 -- Export highlight groups for easy access
 M.highlights = hl.groups
 
+--- Split text into multiple NuiLines while preserving newlines
+---@param content string Text that might contain newlines
+---@param highlight? string Optional highlight group
+---@return NuiLine[]
+function M.multiline(content, highlight)
+    local lines = {}
+    for _, line in ipairs(vim.split(content, "\n", {
+        plain = true
+    })) do
+        table.insert(lines, NuiLine():append(line, highlight))
+    end
+    return lines
+end
+
+--- Add horizontal padding to a line
+---@param line NuiLine|string The line to pad
+---@param highlight? string Optional highlight for string input
+---@return NuiLine
+function M.pad_line(line, highlight)
+    local nui_line = NuiLine():append(string.rep(" ", M.HORIZONTAL_PADDING))
+
+    if type(line) == "string" then
+        nui_line:append(line, highlight)
+    else
+        nui_line:append(line)
+    end
+
+    return nui_line:append(string.rep(" ", M.HORIZONTAL_PADDING))
+end
+
+--- Create empty line with consistent padding
+---@return NuiLine
+function M.empty_line()
+    return M.pad_line("")
+end
+
+--- Create a section with title and content
+---@param title string Section title
+---@param content NuiLine[] Content lines
+---@param expanded boolean Whether section starts expanded
+---@param highlight? string Optional highlight for title
+---@return NuiLine[]
+function M.section(title, content, expanded, highlight)
+    local lines = {}
+    local icon = expanded and "▾" or "▸"
+
+    -- Add title with icon
+    table.insert(lines, M.pad_line(NuiLine():append(icon .. " " .. title, highlight or M.highlights.header)))
+
+    -- Add content if expanded
+    if expanded then
+        for _, line in ipairs(content) do
+            table.insert(lines, M.pad_line(line))
+        end
+    end
+
+    return lines
+end
+
+--- Create a divider line
+---@param width number Total width
+---@param highlight? string Optional highlight
+---@return NuiLine
+function M.divider(width)
+    return M.pad_line(string.rep("─", width - (M.HORIZONTAL_PADDING * 2)), M.highlights.muted)
+end
+
+--- Align text with proper padding
 ---@param text string
 ---@param width number
 ---@param align "left"|"center"|"right"
 ---@param highlight? string
 ---@return NuiLine
 function M.align_text(text, width, align, highlight)
-    return NuiLine.pad_text(text, width, align, highlight)
+    local inner_width = width - (M.HORIZONTAL_PADDING * 2)
+    local line = NuiLine.pad_text(text, inner_width, align, highlight)
+    return M.pad_line(line)
 end
 
 ---@param label string
@@ -74,14 +150,6 @@ function M.render_header(width, current_view)
         key = "S",
         label = "Servers",
         view = "servers"
-    }, {
-        key = "T",
-        label = "Tools",
-        view = "tools"
-    }, {
-        key = "R",
-        label = "Resources",
-        view = "resources"
     }, {
         key = "C",
         label = "Config",

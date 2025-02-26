@@ -24,6 +24,7 @@ Error.Types = {
         CONNECTION = "CONNECTION",
         HEALTH_CHECK = "HEALTH_CHECK",
         API_ERROR = "API_ERROR",
+        CURL_ERROR = "CURL_ERROR",
         TIMEOUT = "TIMEOUT"
     },
     RUNTIME = {
