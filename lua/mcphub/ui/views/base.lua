@@ -83,8 +83,8 @@ function View:get_width()
 end
 
 -- Add divider
-function View:divider()
-    return Text.divider(self:get_width())
+function View:divider(is_full)
+    return Text.divider(self:get_width(), is_full)
 end
 
 --- Create an empty line
@@ -156,7 +156,7 @@ function View:render_footer()
 
     -- Add padding and divider
     table.insert(lines, Text.empty_line())
-    table.insert(lines, self:divider())
+    table.insert(lines, self:divider(true))
 
     -- Get all keymaps
     local key_items = {}
@@ -211,9 +211,6 @@ function View:render()
     -- Views should override this to provide content
     table.insert(lines, Text.pad_line(NuiLine():append("No content implemented for this view", Text.highlights.muted)))
 
-    -- Add footer
-    vim.tbl_extend(lines, self:render_footer())
-
     return lines
 end
 
@@ -228,10 +225,24 @@ function View:draw()
     -- Clear buffer
     vim.api.nvim_buf_set_lines(buf, 0, -1, false, {})
 
-    -- Get content lines
+    -- Get content and footer lines
     local lines = self:render()
-    -- Render footer
-    vim.list_extend(lines, self:render_footer())
+    local footer_lines = self:render_footer()
+
+    -- Calculate if we need padding
+    local win_height = vim.api.nvim_win_get_height(self.ui.window)
+    local content_height = #lines
+    local total_needed = win_height - content_height - #footer_lines
+
+    -- Add padding if needed
+    if total_needed > 0 then
+        for _ = 1, total_needed do
+            table.insert(lines, Text.empty_line())
+        end
+    end
+
+    -- Add footer at the end
+    vim.list_extend(lines, footer_lines)
 
     -- Render each line with proper highlights
     local line_idx = 1

@@ -77,7 +77,10 @@ end
 ---@param width number Total width
 ---@param highlight? string Optional highlight
 ---@return NuiLine
-function M.divider(width)
+function M.divider(width, is_full)
+    if is_full then
+        return NuiLine():append(string.rep("-", width), M.highlights.muted)
+    end
     return M.pad_line(string.rep("-", width - (M.HORIZONTAL_PADDING * 2)), M.highlights.muted)
 end
 
