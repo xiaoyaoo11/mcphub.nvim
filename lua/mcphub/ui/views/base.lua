@@ -169,6 +169,14 @@ function View:render_footer()
         })
     end
 
+    table.insert(key_items, {
+        key = "r",
+        desc = "Refresh"
+    })
+    table.insert(key_items, {
+        key = "R",
+        desc = "Restart Hub"
+    })
     -- Add common close
     table.insert(key_items, {
         key = "q",

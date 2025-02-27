@@ -17,17 +17,6 @@ ServersView.__index = ServersView
 
 function ServersView:new(ui)
     local self = View:new(ui, "servers") -- Create base view with name
-    self.keymaps = {
-        ['r'] = {
-            action = function()
-                if State.setup_state == "completed" and State.hub_instance then
-                    State.hub_instance:get_health()
-                end
-            end,
-            desc = "Refresh servers"
-        }
-    }
-
     return setmetatable(self, ServersView)
 end
 

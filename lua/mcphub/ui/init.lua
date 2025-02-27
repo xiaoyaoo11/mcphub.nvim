@@ -130,6 +130,14 @@ function UI:setup_keymaps()
     map('q', function()
         self:cleanup()
     end, "Close window")
+
+    map("r", function()
+        self:refresh()
+    end, "Refresh")
+
+    map("R", function()
+        self:restart()
+    end, "Restart")
 end
 
 --- Create a new buffer for the UI
@@ -183,6 +191,34 @@ function UI:create_window()
         "Normal:" .. hl.groups.window_normal .. ",FloatBorder:" .. hl.groups.window_border)
 
     return self.window
+end
+
+function UI:refresh()
+    if State.hub_instance then
+        vim.notify("Refreshing")
+        if (State.hub_instance:refresh()) then
+            vim.notify("Refreshed")
+        else
+            vim.notify("Failed to refresh")
+        end
+    else
+        vim.notify("No hub instance available")
+    end
+end
+
+function UI:restart()
+    if State.hub_instance then
+        vim.notify("Restarting")
+        State.hub_instance:restart(function(success)
+            if success then
+                vim.notify("Restarted")
+            else
+                vim.notify("Failed to restart")
+            end
+        end)
+    else
+        vim.notify("No hub instance available")
+    end
 end
 
 --- Clean up resources
@@ -253,9 +289,10 @@ end
 --- Render current view
 ---@private
 function UI:render()
-    if self.current_view and self.views[self.current_view] then
-        self.views[self.current_view]:draw()
-    end
+    -- if self.current_view and self.views[self.current_view] then
+    --     self.views[self.current_view]:draw()
+    -- end
+    self:switch_view(self.current_view)
 end
 
 return UI

@@ -46,6 +46,25 @@ local State = {
     }
 }
 
+function State:reset()
+    State.server_state = {
+        status = "disconnected",
+        pid = nil,
+        started_at = nil,
+        servers = {}
+    }
+    State.errors = {
+        setup = {},
+        server = {},
+        runtime = {},
+        _by_id = {}
+    }
+    State.server_output = {
+        entries = {}
+    }
+    State.last_update = 0
+end
+
 function State:update(partial_state, update_type)
     update_type = update_type or "all"
     local changes = {}

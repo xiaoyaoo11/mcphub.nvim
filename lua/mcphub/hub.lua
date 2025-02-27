@@ -53,8 +53,8 @@ end
 
 --- Start the MCP Hub server
 --- @param opts? { on_ready: function, on_error: function }
-function MCPHub:start(opts)
-    opts = opts or {}
+function MCPHub:start(opts, restart_callback)
+    opts = opts or State.config
 
     -- Update state
     State:update({
@@ -62,6 +62,7 @@ function MCPHub:start(opts)
             status = "connecting"
         }
     }, "server")
+    local has_called_restart_callback = false
 
     -- Check if server is already running
     self:check_server(function(is_running)
@@ -79,6 +80,12 @@ function MCPHub:start(opts)
             command = "mcp-hub",
             args = {"--port", tostring(self.port), "--config", self.config},
             on_stdout = vim.schedule_wrap(function(_, data)
+                if has_called_restart_callback == false then
+                    if restart_callback then
+                        restart_callback(true)
+                        has_called_restart_callback = true
+                    end
+                end
                 handlers.ProcessHandlers.handle_output(data, self, opts)
             end),
             on_stderr = vim.schedule_wrap(function(_, data)
@@ -86,7 +93,7 @@ function MCPHub:start(opts)
             end),
             on_exit = vim.schedule_wrap(function(j, code)
                 if code ~= 0 then
-                    self:handle_server_error("Server process exited with code " .. code, opts)
+                    self:handle_server_error("Server process exited with code " .. (code or ""), opts)
                 end
                 State:update({
                     server_state = {
@@ -375,18 +382,18 @@ function MCPHub:stop()
         }
     })
 
+    if self.is_owner then
+        if self.server_job then
+            self.server_job:shutdown()
+        end
+    end
+
     State:update({
         server_state = {
             status = "disconnected",
             pid = nil
         }
     }, "server")
-
-    if self.is_owner then
-        if self.server_job then
-            self.server_job:shutdown()
-        end
-    end
 
     -- Clear state
     self.ready = false
@@ -397,6 +404,41 @@ end
 
 function MCPHub:is_ready()
     return self.ready
+end
+
+function MCPHub:refresh()
+    if not self:ensure_ready() then
+        return
+    end
+    local response, err = self:get_health()
+    if err then
+        if self:is_ready() then
+            local health_err = Error("SERVER", Error.Types.SERVER.HEALTH_CHECK, "Health check failed", {
+                error = err
+            })
+            State:add_error(health_err)
+        end
+        return false
+    else
+        State:update({
+            server_state = vim.tbl_extend("force", State.server_state, {
+                servers = response.servers or {}
+            })
+        }, "server")
+        return true
+    end
+end
+
+function MCPHub:restart(callback)
+    if not self:ensure_ready() then
+        return
+    end
+    self:stop()
+    State:reset()
+    local restart_callback = function(success)
+        callback(success)
+    end
+    self:start(nil, restart_callback)
 end
 
 function MCPHub:ensure_ready()
