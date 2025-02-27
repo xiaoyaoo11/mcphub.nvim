@@ -14,7 +14,8 @@ M.groups = {
     success = "MCPHubSuccess",
     muted = "MCPHubMuted",
     window_normal = "MCPHubNormal",
-    window_border = "MCPHubBorder"
+    window_border = "MCPHubBorder",
+    active_item = "MCPHubActiveItem"
 }
 
 -- Setup highlight groups
@@ -54,6 +55,13 @@ function M.setup()
         [M.groups.header_shortcut] = {
             bg = "#444444",
             fg = "#ff966c", -- Orange for shortcuts
+            bold = true
+        },
+
+        -- Interactive elements
+        [M.groups.active_item] = {
+            bg = "#2a2a2a",
+            fg = "#c792ea",
             bold = true
         },
 
