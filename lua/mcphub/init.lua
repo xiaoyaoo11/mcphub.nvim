@@ -72,6 +72,7 @@ function M.setup(opts)
 
     -- Create UI instance early
     State.ui_instance = require("mcphub.ui"):new()
+    State.config = config
 
     -- Create command early
     vim.api.nvim_create_user_command("MCPHub", function()

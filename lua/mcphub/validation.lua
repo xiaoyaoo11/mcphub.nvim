@@ -44,6 +44,12 @@ end
 ---@param path string
 ---@return ValidationResult
 function M.validate_config_file(path)
+    if not path then
+        return {
+            ok = false,
+            error = Error("SETUP", Error.Types.SETUP.INVALID_CONFIG, "Config file path is required")
+        }
+    end
     local file = io.open(path, "r")
     if not file then
         return {
@@ -75,7 +81,9 @@ function M.validate_config_file(path)
     end
 
     return {
-        ok = true
+        ok = true,
+        json = json,
+        content = content
     }
 end
 

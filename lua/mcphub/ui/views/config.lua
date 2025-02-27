@@ -6,6 +6,7 @@ local State = require("mcphub.state")
 local View = require("mcphub.ui.views.base")
 local Text = require("mcphub.utils.text")
 local NuiLine = require("mcphub.utils.nuiline")
+local validation = require("mcphub.validation")
 
 ---@class ConfigView
 ---@field super View
@@ -19,8 +20,9 @@ function ConfigView:new(ui)
     self.keymaps = {
         ["e"] = {
             action = function()
-                if State.hub_instance and State.hub_instance.config then
-                    vim.cmd("edit " .. State.hub_instance.config)
+                if State.config and State.config.config then
+                    self.ui:toggle()
+                    vim.cmd("edit " .. State.config.config)
                 else
                     vim.notify("No configuration file available", vim.log.levels.ERROR)
                 end
@@ -39,7 +41,8 @@ function ConfigView:render_server_config(server_name, config)
     local lines = {}
 
     -- Server header with disabled status if any
-    local header = NuiLine():append("• ", Text.highlights.muted):append(server_name, Text.highlights.header)
+    local header = NuiLine():append("• ", Text.highlights.muted):append(" " .. server_name .. " ",
+        Text.highlights.header)
     if config.disabled then
         header:append(" ", Text.highlights.muted):append("(disabled)", Text.highlights.warning)
     end
@@ -73,11 +76,11 @@ function ConfigView:render()
     local width = self:get_width()
 
     -- Add config file info
-    table.insert(lines, Text.section("MCP Servers Configuration", {}, true)[1])
+    table.insert(lines, Text.section("MCP Servers Configuration ", {}, true)[1])
 
     -- Show config file path
-    if State.hub_instance and State.hub_instance.config then
-        local file_line = NuiLine():append("Config File: ", Text.highlights.muted):append(State.hub_instance.config,
+    if State.config and State.config.config then
+        local file_line = NuiLine():append("Config File: ", Text.highlights.muted):append(State.config.config,
             Text.highlights.info)
         table.insert(lines, Text.pad_line(file_line))
     else
@@ -90,22 +93,24 @@ function ConfigView:render()
     table.insert(lines, self:divider())
     table.insert(lines, Text.empty_line())
 
-    -- Show server configurations
-    if State.config and State.config.mcpServers then
-        local has_servers = false
-        for name, cfg in pairs(State.config.mcpServers) do
-            has_servers = true
-            vim.list_extend(lines, self:render_server_config(name, cfg))
-            table.insert(lines, Text.empty_line())
-        end
+    local file_validation = validation.validate_config_file(State.config.config)
+    if file_validation.ok then
+        if file_validation.json.mcpServers then
+            local has_servers = false
+            for name, cfg in pairs(file_validation.json.mcpServers) do
+                has_servers = true
+                vim.list_extend(lines, self:render_server_config(name, cfg))
+                table.insert(lines, Text.empty_line())
+            end
 
-        if not has_servers then
-            table.insert(lines, Text.align_text("No servers configured", width, "center", Text.highlights.warning))
+            if not has_servers then
+                table.insert(lines, Text.align_text("No servers configured", width, "center", Text.highlights.warning))
+            end
         end
     else
-        table.insert(lines, Text.align_text("Configuration not loaded", width, "center", Text.highlights.warning))
+        table.insert(lines, Text.pad_line(NuiLine():append(file_validation.error.message, Text.highlights.error)))
+        table.insert(lines, Text.empty_line())
     end
-
     return lines
 end
 

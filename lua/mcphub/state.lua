@@ -9,6 +9,9 @@ local State = {
     -- Setup state
     setup_state = "not_started",
 
+    -- config
+    config = {},
+
     -- Core instances
     hub_instance = nil,
     ui_instance = nil,
