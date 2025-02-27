@@ -32,18 +32,9 @@ local State = {
         _by_id = {} -- Quick lookup by error ID
     },
 
-    -- Process streams
-    output = {
-        stdout = {}, -- Raw server stdout messages
-        stderr = {} -- Raw server stderr messages
-    },
-
-    -- Logging messages
-    logs = {
-        debug = {},
-        info = {},
-        warn = {},
-        error = {}
+    -- Server output
+    server_output = {
+        entries = {} -- Chronological server output entries
     },
 
     -- State management
@@ -147,41 +138,30 @@ function State:get_errors(type)
     return all_errors
 end
 
--- For raw server output (stdout/stderr)
-function State:add_output(stream_type, data)
-    if not self.output[stream_type] then
+-- For server output (stdout/stderr)
+function State:add_server_output(entry)
+    if not entry or not entry.type or not entry.message then
         return
     end
-    table.insert(self.output[stream_type], {
-        time = vim.loop.now(),
-        data = data
-    })
-    -- Keep reasonable history
-    if #self.output[stream_type] > 1000 then
-        table.remove(self.output[stream_type], 1)
-    end
-    self:notify_subscribers({
-        output = true
-    }, "server")
-end
 
--- For logging messages from log.lua
-function State:add_log(level, msg)
-    if not self.logs[level] then
-        return
+    -- Ensure entry has timestamp
+    entry.timestamp = entry.timestamp or vim.loop.now()
+
+    table.insert(self.server_output.entries, {
+        type = entry.type, -- info/warn/error/debug
+        message = entry.message, -- The actual message
+        timestamp = entry.timestamp,
+        data = entry.data -- Optional extra data
+    })
+
+    -- Keep reasonable history
+    if #self.server_output.entries > 1000 then
+        table.remove(self.server_output.entries, 1)
     end
-    local entry = {
-        time = vim.loop.now(),
-        message = msg
-    }
-    table.insert(self.logs[level], entry)
-    -- Keep reasonable history per level
-    if #self.logs[level] > 1000 then
-        table.remove(self.logs[level], 1)
-    end
+
     self:notify_subscribers({
-        logs = true
-    }, "ui")
+        server_output = true
+    }, "server")
 end
 
 function State:subscribe(callback, types)

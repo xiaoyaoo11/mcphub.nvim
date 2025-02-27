@@ -212,7 +212,7 @@ function View:render()
     table.insert(lines, Text.pad_line(NuiLine():append("No content implemented for this view", Text.highlights.muted)))
 
     -- Add footer
-    vim.list_extend(lines, self:render_footer())
+    vim.tbl_extend(lines, self:render_footer())
 
     return lines
 end

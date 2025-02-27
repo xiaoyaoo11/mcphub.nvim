@@ -6,6 +6,7 @@ local State = require("mcphub.state")
 local View = require("mcphub.ui.views.base")
 local Text = require("mcphub.utils.text")
 local NuiLine = require("mcphub.utils.nuiline")
+local renderer = require("mcphub.utils.renderer")
 
 ---@class MainView
 ---@field super View
@@ -65,8 +66,9 @@ function MainView:render_server_status(width)
                 State.server_state.started_at))
             table.insert(lines, Text.pad_line(time_line))
         end
+    else
+        vim.list_extend(lines, renderer.render_server_entries(State.server_output.entries, false))
     end
-
     table.insert(lines, Text.empty_line())
     return lines
 end
@@ -107,37 +109,6 @@ function MainView:render_servers()
     return lines
 end
 
---- Render recent errors section if any
----@return NuiLine[]
-function MainView:render_recent_errors()
-    local lines = {}
-
-    if #State.errors.server > 0 then
-        -- Section header
-        table.insert(lines, Text.section("Recent Issues", {}, true)[1])
-
-        for i = 1, #State.errors.server, 1 do
-            local err = State.errors.server[i]
-            local error_lines = Text.multiline(err.message, Text.highlights.error)
-            local first_line = NuiLine():append("• ", Text.highlights.error):append(error_lines[1])
-            error_lines[1] = first_line
-            vim.list_extend(lines, vim.tbl_map(Text.pad_line, error_lines))
-
-            -- Add error details if any
-            if err.details and next(err.details) then
-                local errlines = vim.tbl_map(function(t)
-                    return Text.pad_line(Text.pad_line(t))
-                end, Text.multiline(vim.inspect(err.details), Text.highlights.muted))
-                vim.list_extend(lines, errlines)
-            end
-        end
-
-        table.insert(lines, Text.empty_line())
-    end
-
-    return lines
-end
-
 function MainView:render()
     -- Handle special states from base view
     if State.setup_state == "failed" or State.setup_state == "in_progress" then
@@ -155,7 +126,7 @@ function MainView:render()
     vim.list_extend(lines, self:render_servers())
 
     -- Recent errors section
-    vim.list_extend(lines, self:render_recent_errors())
+    vim.list_extend(lines, renderer.render_hub_errors(State.errors.server))
 
     return lines
 end

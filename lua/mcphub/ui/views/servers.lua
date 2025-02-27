@@ -6,6 +6,7 @@ local State = require("mcphub.state")
 local View = require("mcphub.ui.views.base")
 local Text = require("mcphub.utils.text")
 local NuiLine = require("mcphub.utils.nuiline")
+local renderer = require("mcphub.utils.renderer")
 
 ---@class ServersView
 ---@field super View
@@ -141,29 +142,7 @@ function ServersView:render()
         else
             table.insert(lines, Text.align_text("No servers connected", width, "center", Text.highlights.muted))
         end
-
-        -- Show recent errors if any
-        if #State.errors.server > 0 then
-            table.insert(lines, Text.empty_line())
-            table.insert(lines, Text.section("Recent Issues", {}, true)[1])
-
-            -- Show last 3 errors
-            for i = #State.errors.server, math.max(1, #State.errors.server - 2), -1 do
-                local err = State.errors.server[i]
-                local error_line = NuiLine():append("• ", Text.highlights.error):append(err.message,
-                    Text.highlights.error)
-                table.insert(lines, Text.pad_line(error_line))
-
-                -- Add error details if any
-                if err.details then
-                    local details = vim.split(vim.inspect(err.details), "\n")
-                    for _, detail in ipairs(details) do
-                        local detail_line = NuiLine():append("  "):append(detail, Text.highlights.muted)
-                        table.insert(lines, Text.pad_line(detail_line))
-                    end
-                end
-            end
-        end
+        vim.list_extend(lines, renderer.render_hub_errors(State.errors.server))
     else
         -- Show offline state
         table.insert(lines,

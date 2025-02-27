@@ -1,12 +1,14 @@
 local log = require("mcphub.utils.log")
 local Error = require("mcphub.errors")
+local State = require("mcphub.state")
 
 local M = {}
 
 --- Process handlers for server process management
 M.ProcessHandlers = {
-    --- Handle server process stdout/stderr
+    --- Handle server process output
     --- @param data string Raw output data
+    --- @param hub MCPHub The hub instance
     --- @param opts table Options including callbacks
     --- @return boolean handled Whether the data was handled
     handle_output = function(data, hub, opts)
@@ -14,47 +16,64 @@ M.ProcessHandlers = {
             return ""
         end
 
+        -- Try to parse as JSON
         local ok, parsed = pcall(vim.json.decode, data)
         if not ok then
-            -- Not JSON data, let caller handle raw output
+            -- Not JSON, treat as raw log
+            State:add_server_output({
+                type = "info", -- Default to info for non-JSON messages
+                message = data,
+                timestamp = vim.loop.now(), -- Use system time if no timestamp
+                data = nil
+            })
             return data
         end
 
         -- Handle structured server logs
-        if parsed.type == "error" then
-            local error_obj = Error("SERVER", parsed.code or Error.Types.SERVER.CONNECTION, parsed.message, parsed.data)
-            log.error(tostring(error_obj))
-            hub:handle_server_error(tostring(error_obj), opts)
-            -- Mark as handled since it's an error
-            return true
-        end
+        if parsed.type then
+            -- Use message timestamp if valid ISO string, otherwise system time
+            local timestamp = vim.loop.now()
+            if parsed.timestamp then
+                -- Try to convert ISO string to unix timestamp
+                local success, ts = pcall(function()
+                    return vim.fn.strptime("%Y-%m-%dT%H:%M:%S", parsed.timestamp)
+                end)
+                if success then
+                    timestamp = ts
+                end
+            end
 
-        -- Log other structured messages at appropriate level
-        if parsed.type == "info" then
-            log.info({
-                code = parsed.code or "SERVER_INFO",
+            State:add_server_output({
+                type = parsed.type, -- warn/error/info/debug
                 message = parsed.message,
+                code = parsed.code,
+                timestamp = timestamp,
                 data = parsed.data
             })
-        elseif parsed.type == "warn" then
-            log.warn({
-                code = parsed.code or "SERVER_WARN",
-                message = parsed.message,
-                data = parsed.data
-            })
-        elseif parsed.type == "debug" then
-            log.debug({
-                code = parsed.code or "SERVER_DEBUG",
-                message = parsed.message,
-                data = parsed.data
-            })
-        end
 
-        -- Handle ready state (backward compatibility)
-        if (parsed.type == "info" and parsed.message == "MCP_HUB_STARTED" and parsed.data) and parsed.data.status ==
-            "ready" then
-            hub:handle_server_ready(opts)
-            return true
+            -- Special error handling
+            if parsed.type == "error" then
+                local error_obj = Error("SERVER", parsed.code or Error.Types.SERVER.CONNECTION, parsed.message,
+                    parsed.data)
+                State:add_error(error_obj)
+                log.error(tostring(error_obj))
+                hub:handle_server_error(tostring(error_obj), opts)
+                return true
+            end
+
+            -- Log at appropriate level
+            log[parsed.type]({
+                code = parsed.code or "SERVER_" .. string.upper(parsed.type),
+                message = parsed.message,
+                data = parsed.data
+            })
+
+            -- Handle ready state (backward compatibility)
+            if parsed.type == "info" and parsed.message == "MCP_HUB_STARTED" and parsed.data and parsed.data.status ==
+                "ready" then
+                hub:handle_server_ready(opts)
+                return true
+            end
         end
 
         return true

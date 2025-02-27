@@ -79,11 +79,9 @@ function MCPHub:start(opts)
             command = "mcp-hub",
             args = {"--port", tostring(self.port), "--config", self.config},
             on_stdout = vim.schedule_wrap(function(_, data)
-                State:add_output("stdout", data)
                 handlers.ProcessHandlers.handle_output(data, self, opts)
             end),
             on_stderr = vim.schedule_wrap(function(_, data)
-                State:add_output("stderr", data)
                 handlers.ProcessHandlers.handle_output(data, self, opts)
             end),
             on_exit = vim.schedule_wrap(function(j, code)
@@ -164,8 +162,6 @@ end
 function MCPHub:handle_server_error(msg, opts)
     -- Create proper error object for server errors
     if not self.is_shutting_down then -- Prevent error logging during shutdown
-        local err = Error("SERVER", Error.Types.SERVER.CONNECTION, msg)
-        State:add_error(err)
         if opts.on_error then
             opts.on_error(tostring(err))
         end
@@ -385,6 +381,12 @@ function MCPHub:stop()
             pid = nil
         }
     }, "server")
+
+    if self.is_owner then
+        if self.server_job then
+            self.server_job:shutdown()
+        end
+    end
 
     -- Clear state
     self.ready = false
