@@ -14,6 +14,7 @@ local highlights = require("mcphub.utils.highlights")
 ---@field cursor_highlight number|nil Extmark ID for current highlight
 ---@field hover_ns number Namespace for highlights
 ---@field server_sections table<string, {start_line: number, end_line: number, tools: {name: string, line: number}[]}>
+---@field execution_state { active: boolean, server_name: string|nil, tool_name: string|nil, tool_info: table|nil }
 local ServersView = setmetatable({}, {
     __index = View
 })
@@ -27,6 +28,12 @@ function ServersView:new(ui)
     self.hover_ns = vim.api.nvim_create_namespace("MCPHubServersHover")
     self.cursor_highlight = nil
     self.server_sections = {}
+    self.execution_state = {
+        active = false,
+        server_name = nil,
+        tool_name = nil,
+        tool_info = nil
+    }
 
     return self
 end
@@ -52,6 +59,11 @@ end
 --- Handle cursor movement
 ---@private
 function ServersView:handle_cursor_move()
+    -- Don't handle cursor moves in execution mode
+    if self.execution_state.active then
+        return
+    end
+
     -- Clear previous highlight if any
     if self.cursor_highlight then
         vim.api.nvim_buf_del_extmark(self.ui.buffer, self.hover_ns, self.cursor_highlight)
@@ -74,6 +86,54 @@ function ServersView:handle_cursor_move()
     end
 end
 
+function ServersView:get_tool_info(server_name, tool_name)
+    local server = nil
+    for _, s in ipairs(State.server_state.servers or {}) do
+        if s.name == server_name then
+            server = s
+            break
+        end
+    end
+
+    if server and server.capabilities then
+        for _, tool in ipairs(server.capabilities.tools) do
+            if tool.name == tool_name then
+                return tool
+            end
+        end
+    end
+    return nil
+end
+
+function ServersView:enter_execution_mode(server_name, tool_name)
+    self.execution_state = {
+        active = true,
+        server_name = server_name,
+        tool_name = tool_name,
+        tool_info = self:get_tool_info(server_name, tool_name)
+    }
+end
+
+function ServersView:exit_execution_mode()
+    self.execution_state = {
+        active = false,
+        server_name = nil,
+        tool_name = nil,
+        tool_info = nil
+    }
+end
+
+function ServersView:render_breadcrumb()
+    if not self.execution_state.active then
+        return {}
+    end
+
+    local breadcrumb = NuiLine():append(self.execution_state.server_name, Text.highlights.title):append(" > ",
+        Text.highlights.muted):append(" " .. self.execution_state.tool_name .. " ", Text.highlights.header)
+
+    return {Text.pad_line(breadcrumb)}
+end
+
 function ServersView:on_enter()
     View.on_enter(self) -- Call parent method
 
@@ -91,16 +151,28 @@ function ServersView:on_enter()
 
     -- Add <CR> mapping for tool execution
     self:add_keymap("<CR>", function()
+        if self.execution_state.active then
+            return -- Ignore in execution mode for now (will handle in phase 3)
+        end
+
         local cursor = vim.api.nvim_win_get_cursor(0)
         local line = cursor[1]
 
         -- Get tool info from our mapping
         local server_name, tool_name = self:get_line_info(line)
         if server_name and tool_name then
-            vim.notify(string.format("Selected tool: %s from server: %s", tool_name, server_name))
-            -- More functionality will be added in next phase
+            self:enter_execution_mode(server_name, tool_name)
+            self:draw() -- Redraw in execution mode
         end
     end, "Execute tool/resource")
+
+    -- Add escape mapping to exit execution mode
+    self:add_keymap("<Esc>", function()
+        if self.execution_state.active then
+            self:exit_execution_mode()
+            self:draw()
+        end
+    end, "Exit tool execution mode")
 end
 
 function ServersView:on_leave()
@@ -109,6 +181,11 @@ function ServersView:on_leave()
         vim.api.nvim_buf_del_extmark(self.ui.buffer, self.hover_ns, self.cursor_highlight)
         self.cursor_highlight = nil
     end
+
+    -- -- Exit execution mode if active
+    -- if self.execution_state.active then
+    --     self:exit_execution_mode()
+    -- end
 
     View.on_leave(self) -- Call parent method
 end
@@ -218,8 +295,31 @@ function ServersView:render()
         return View.render(self)
     end
 
-    -- Get base header
-    local lines = self:render_header()
+    -- Get base header (with/without extra line based on mode)
+    local lines = self:render_header(not self.execution_state.active)
+
+    if self.execution_state.active then
+        -- Execution mode view
+        vim.list_extend(lines, self:render_breadcrumb())
+        vim.list_extend(lines, {self:divider()})
+
+        -- Tool info section
+        if self.execution_state.tool_info then
+            -- Description
+            local desc = self.execution_state.tool_info.description or "No description available"
+            vim.list_extend(lines, vim.tbl_map(Text.pad_line, Text.multiline(desc, Text.highlights.info)))
+
+            -- Schema info (placeholder for Phase 3)
+            if self.execution_state.tool_info.inputSchema then
+                -- Basic schema display
+                table.insert(lines, Text.empty_line())
+                table.insert(lines, Text.pad_line(NuiLine():append(" Input Parameters: ", Text.highlights.header)))
+                -- Schema details will be enhanced in Phase 3
+            end
+        end
+        return lines
+    end
+
     local width = self:get_width()
     -- Reset server sections for new render
     self.server_sections = {}

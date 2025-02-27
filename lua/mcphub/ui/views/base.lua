@@ -95,10 +95,13 @@ end
 
 --- Render header for view
 --- @return NuiLine[] Header lines
-function View:render_header()
+function View:render_header(add_new_line)
+    add_new_line = add_new_line == nil and true or add_new_line
     local lines = Text.render_header(self:get_width(), self.ui.current_view)
     table.insert(lines, self:divider())
-    table.insert(lines, self:line())
+    if add_new_line then
+        table.insert(lines, self:line())
+    end
     return lines
 end
 
