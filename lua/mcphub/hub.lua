@@ -245,13 +245,35 @@ end
 --- @param opts? { callback?: function, timeout?: number } Optional callback(response: table|nil, error?: string) and timeout in ms (default 30s)
 --- @return table|nil, string|nil If no callback is provided, returns response and error
 function MCPHub:call_tool(server_name, tool_name, args, opts)
-    return self:api_request("POST", string.format("servers/%s/tools", server_name), vim.tbl_extend("force", {
-        timeout = TOOL_TIMEOUT,
-        body = {
-            tool = tool_name,
-            arguments = args or {}
-        }
-    }, opts or {}))
+    opts = opts or {}
+    if opts.return_text == true then
+        if opts.callback then
+            local original_callback = opts.callback
+            opts.callback = function(response, err)
+                local text = prompt_utils.parse_tool_response(response)
+                original_callback(text, err)
+            end
+        end
+    end
+    -- ensure args is treated as an object in json
+    local arguments = args or {}
+    if vim.tbl_isempty(arguments) then
+        -- add a property that will force encoding as an object
+        arguments.__object = true
+    end
+
+    local response, err = self:api_request("POST", string.format("servers/%s/tools", server_name),
+        vim.tbl_extend("force", {
+            timeout = opts.timeout or TOOL_TIMEOUT,
+            body = {
+                tool = tool_name,
+                arguments = arguments
+            }
+        }, opts))
+    -- handle sync calls
+    if opts.callback == nil then
+        return (opts.return_text == true and prompt_utils.parse_tool_response(response) or response), err
+    end
 end
 
 --- Access a server resource
@@ -260,12 +282,27 @@ end
 --- @param opts? { callback?: function, timeout?: number } Optional callback(response: table|nil, error?: string) and timeout in ms (default 30s)
 --- @return table|nil, string|nil If no callback is provided, returns response and error
 function MCPHub:access_resource(server_name, uri, opts)
-    return self:api_request("POST", string.format("servers/%s/resources", server_name), vim.tbl_extend("force", {
-        timeout = RESOURCE_TIMEOUT,
-        body = {
-            uri = uri
-        }
-    }, opts or {}))
+    opts = opts or {}
+    if opts.return_text == true then
+        if opts.callback then
+            local original_callback = opts.callback
+            opts.callback = function(response, err)
+                local text = prompt_utils.parse_resource_response(response)
+                original_callback(text, err)
+            end
+        end
+    end
+    local response, err = self:api_request("POST", string.format("servers/%s/resources", server_name),
+        vim.tbl_extend("force", {
+            timeout = opts.timeout or RESOURCE_TIMEOUT,
+            body = {
+                uri = uri
+            }
+        }, opts))
+    -- handle sync calls
+    if opts.callback == nil then
+        return (opts.return_text == true and prompt_utils.parse_resource_response(response) or response), err
+    end
 end
 
 --- API request helper

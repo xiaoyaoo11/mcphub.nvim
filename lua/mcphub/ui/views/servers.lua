@@ -8,13 +8,14 @@ local Text = require("mcphub.utils.text")
 local NuiLine = require("mcphub.utils.nuiline")
 local renderer = require("mcphub.utils.renderer")
 local highlights = require("mcphub.utils.highlights")
+local Utils = require("mcphub.ui.views.servers_utils")
 
 ---@class ServersView
 ---@field super View
 ---@field cursor_highlight number|nil Extmark ID for current highlight
 ---@field hover_ns number Namespace for highlights
 ---@field server_sections table<string, {start_line: number, end_line: number, tools: {name: string, line: number}[]}>
----@field execution_state { active: boolean, server_name: string|nil, tool_name: string|nil, tool_info: table|nil, params: { values: table<string, string>, errors: table<string, string>, focused_index: number|nil, submit_error: string|nil, result: table|nil }|nil }
+---@field execution_state { active: boolean, server_name: string|nil, tool_name: string|nil, tool_info: table|nil, params: { values: table<string, string>, errors: table<string, string>, param_lines: table<number, string>, submit_line: number|nil, submit_error: string|nil, result: table|nil }|nil }
 local ServersView = setmetatable({}, {
     __index = View
 })
@@ -39,148 +40,6 @@ function ServersView:new(ui)
     return self
 end
 
-function ServersView:get_ordered_params()
-    if not self.execution_state.active or not self.execution_state.tool_info then
-        return {}
-    end
-
-    local schema = self.execution_state.tool_info.inputSchema
-    if not schema or not schema.properties then
-        return {}
-    end
-
-    local params = {}
-    for name, prop in pairs(schema.properties) do
-        table.insert(params, {
-            name = name,
-            type = prop.type,
-            description = prop.description,
-            required = vim.tbl_contains(schema.required or {}, name),
-            default = prop.default,
-            value = self.execution_state.params.values[name]
-        })
-    end
-
-    -- Sort by required first, then name
-    table.sort(params, function(a, b)
-        if a.required ~= b.required then
-            return a.required
-        end
-        return a.name < b.name
-    end)
-
-    return params
-end
-
-function ServersView:get_focused_param()
-    if not self.execution_state.params.focused_index then
-        return nil
-    end
-
-    local params = self:get_ordered_params()
-    return params[self.execution_state.params.focused_index]
-end
-
-function ServersView:navigate_params(direction)
-    if not self.execution_state.active then
-        return
-    end
-
-    local params = self:get_ordered_params()
-    local param_count = #params
-
-    if param_count == 0 then
-        return
-    end
-
-    local current = self.execution_state.params.focused_index or 0
-
-    -- Move focus (0 means submit button)
-    if direction == "next" then
-        current = (current + 1) % (param_count + 1)
-    else
-        current = (current - 1 + param_count + 1) % (param_count + 1)
-    end
-
-    self.execution_state.params.focused_index = current > 0 and current or nil
-    self:draw()
-end
-
-function ServersView:validate_all_params()
-    if not self.execution_state.active or not self.execution_state.params then
-        return false, "No parameters to validate"
-    end
-
-    -- Clear existing errors
-    self.execution_state.params.errors = {}
-
-    -- Check all required params
-    local params = self:get_ordered_params()
-    for _, param in ipairs(params) do
-        local value = self.execution_state.params.values[param.name]
-        if param.required and (value == nil or value == "") then
-            self.execution_state.params.errors[param.name] = "Required parameter"
-        end
-    end
-
-    -- Return validation result
-    if next(self.execution_state.params.errors) then
-        return false, "Some required parameters are missing"
-    end
-
-    return true
-end
-
-function ServersView:handle_param_action()
-    if not self.execution_state.params.focused_index then
-        -- On submit button
-        local ok, err = self:validate_all_params()
-        if not ok then
-            self.execution_state.params.submit_error = err
-            self:draw()
-            return
-        end
-
-        -- Execute tool with current values
-        if State.hub_instance then
-            State.hub_instance:call_tool(self.execution_state.server_name, self.execution_state.tool_name,
-                self.execution_state.params.values, {
-                    callback = function(response, err)
-                        if err then
-                            vim.notify("Tool execution failed: " .. err, vim.log.levels.ERROR)
-                            self.execution_state.params.submit_error = err
-                        else
-                            vim.notify("Tool executed successfully", vim.log.levels.INFO)
-                            self.execution_state.params.result = response
-                            self.execution_state.params.submit_error = nil
-                        end
-                        self:draw()
-                    end
-                })
-        end
-        return
-    end
-
-    -- Get focused parameter
-    local param = self:get_focused_param()
-    if not param then
-        return
-    end
-
-    -- Show input prompt
-    vim.ui.input({
-        prompt = param.name .. ": ",
-        default = self.execution_state.params.values[param.name] or param.default or ""
-    }, function(input)
-        if input then
-            -- Update value
-            self.execution_state.params.values[param.name] = input
-            -- Move to next param
-            self:navigate_params("next")
-        end
-    end)
-end
-
 --- Get server and tool info for a given line number
 ---@param line_nr number
 ---@return string|nil server_name, string|nil tool_name
@@ -197,36 +56,6 @@ function ServersView:get_line_info(line_nr)
         end
     end
     return nil, nil
-end
-
---- Handle cursor movement
----@private
-function ServersView:handle_cursor_move()
-    -- Don't handle cursor moves in execution mode
-    if self.execution_state.active then
-        return
-    end
-
-    -- Clear previous highlight if any
-    if self.cursor_highlight then
-        vim.api.nvim_buf_del_extmark(self.ui.buffer, self.hover_ns, self.cursor_highlight)
-        self.cursor_highlight = nil
-    end
-
-    -- Get current line
-    local cursor = vim.api.nvim_win_get_cursor(0)
-    local line = cursor[1]
-
-    -- Check if line contains tool using our mapping
-    local server_name, tool_name = self:get_line_info(line)
-    if tool_name then
-        -- Add highlight and virtual text
-        self.cursor_highlight = vim.api.nvim_buf_set_extmark(self.ui.buffer, self.hover_ns, line - 1, 0, {
-            line_hl_group = highlights.groups.active_item,
-            virt_text = {{"Press <CR> to execute", highlights.groups.muted}},
-            virt_text_pos = "eol"
-        })
-    end
 end
 
 function ServersView:get_tool_info(server_name, tool_name)
@@ -248,6 +77,48 @@ function ServersView:get_tool_info(server_name, tool_name)
     return nil
 end
 
+--- Handle cursor movement
+---@private
+function ServersView:handle_cursor_move()
+    -- Clear previous highlight if any
+    if self.cursor_highlight then
+        vim.api.nvim_buf_del_extmark(self.ui.buffer, self.hover_ns, self.cursor_highlight)
+        self.cursor_highlight = nil
+    end
+
+    -- Get current line
+    local cursor = vim.api.nvim_win_get_cursor(0)
+    local line = cursor[1]
+
+    if self.execution_state.active then
+        -- In execution mode, highlight input lines and submit
+        if self.execution_state.params.param_lines[line] then
+            self.cursor_highlight = vim.api.nvim_buf_set_extmark(self.ui.buffer, self.hover_ns, line - 1, 0, {
+                line_hl_group = highlights.groups.active_item,
+                virt_text = {{"Press <CR> to edit", highlights.groups.muted}},
+                virt_text_pos = "eol"
+            })
+        elseif line == self.execution_state.params.submit_line then
+            self.cursor_highlight = vim.api.nvim_buf_set_extmark(self.ui.buffer, self.hover_ns, line - 1, 0, {
+                line_hl_group = highlights.groups.active_item,
+                virt_text = {{"Press <CR> to execute", highlights.groups.muted}},
+                virt_text_pos = "eol"
+            })
+        end
+        return
+    end
+
+    -- Not in execution mode - highlight tools
+    local server_name, tool_name = self:get_line_info(line)
+    if tool_name then
+        self.cursor_highlight = vim.api.nvim_buf_set_extmark(self.ui.buffer, self.hover_ns, line - 1, 0, {
+            line_hl_group = highlights.groups.active_item,
+            virt_text = {{"Press <CR> to execute", highlights.groups.muted}},
+            virt_text_pos = "eol"
+        })
+    end
+end
+
 function ServersView:enter_execution_mode(server_name, tool_name)
     self.execution_state = {
         active = true,
@@ -257,7 +128,8 @@ function ServersView:enter_execution_mode(server_name, tool_name)
         params = {
             values = {},
             errors = {},
-            focused_index = 1,
+            param_lines = {},
+            submit_line = nil,
             submit_error = nil,
             result = nil
         }
@@ -274,6 +146,64 @@ function ServersView:exit_execution_mode()
     }
 end
 
+function ServersView:handle_param_action()
+    -- Get current line
+    local cursor = vim.api.nvim_win_get_cursor(0)
+    local line = cursor[1]
+
+    if line == self.execution_state.params.submit_line then
+        -- On submit button
+        local ok, err, errors = Utils.validate_all_params(self.execution_state.tool_info,
+            self.execution_state.params.values)
+        if not ok then
+            self.execution_state.params.submit_error = err
+            self.execution_state.params.errors = errors
+            self:draw()
+            return
+        end
+
+        -- Execute tool with current values
+        if State.hub_instance then
+            State.hub_instance:call_tool(self.execution_state.server_name, self.execution_state.tool_name,
+                self.execution_state.params.values, {
+                    return_text = true,
+                    callback = function(response, err)
+                        if err then
+                            vim.notify("Tool execution failed: " .. err, vim.log.levels.ERROR)
+                            self.execution_state.params.submit_error = err
+                        else
+                            vim.notify("Tool executed successfully", vim.log.levels.INFO)
+                            self.execution_state.params.result = response
+                            self.execution_state.params.submit_error = nil
+                        end
+                        self:draw()
+                    end
+                })
+        end
+        return
+    end
+
+    -- Check if line is a parameter input
+    local param_name = self.execution_state.params.param_lines[line]
+    if not param_name then
+        return
+    end
+
+    -- Show input prompt for parameter
+    vim.ui.input({
+        prompt = param_name .. ": ",
+        default = self.execution_state.params.values[param_name] or ""
+    }, function(input)
+        if input then
+            -- Update value
+            self.execution_state.params.values[param_name] = input
+            -- Clear any previous error
+            self.execution_state.params.errors[param_name] = nil
+            self:draw()
+        end
+    end)
+end
+
 function ServersView:render_breadcrumb()
     if not self.execution_state.active then
         return {}
@@ -283,71 +213,6 @@ function ServersView:render_breadcrumb()
         Text.highlights.muted):append(" " .. self.execution_state.tool_name .. " ", Text.highlights.header)
 
     return {Text.pad_line(breadcrumb)}
-end
-
-function ServersView:render_params_form()
-    local lines = {}
-    table.insert(lines, Text.pad_line(" Input Params: ", Text.highlights.header))
-    table.insert(lines, Text.empty_line())
-
-    -- Parameters
-    for i, param in ipairs(self:get_ordered_params()) do
-        local is_focused = self.execution_state.params.focused_index == i
-
-        -- Parameter name
-        local name_line = NuiLine():append(param.required and "* " or "  ", Text.highlights.error):append(param.name,
-            Text.highlights.success)
-
-        if param.type then
-            name_line:append(" (", Text.highlights.muted):append(param.type, Text.highlights.muted):append(")",
-                Text.highlights.muted)
-        end
-
-        table.insert(lines, Text.pad_line(name_line))
-
-        -- Value input
-        local value = self.execution_state.params.values[param.name]
-        local input_line = NuiLine():append(is_focused and "▶ " or "  ", Text.highlights.title):append("> ",
-            Text.highlights.muted):append(value or "",
-            is_focused and Text.highlights.active_item or Text.highlights.info)
-        table.insert(lines, Text.pad_line(input_line))
-
-        -- Error if any
-        if self.execution_state.params.errors[param.name] then
-            table.insert(lines,
-                Text.pad_line(
-                    NuiLine():append("  ⚠ ", Text.highlights.error)
-                        :append(self.execution_state.params.errors[param.name], Text.highlights.error)))
-        end
-
-        -- table.insert(lines, Text.empty_line())
-    end
-
-    -- Submit button
-    local is_submit_focused = self.execution_state.params.focused_index == nil
-    local submit_line = NuiLine():append(is_submit_focused and "▶ " or "  ", Text.highlights.title):append(
-        "[ Submit ]", is_submit_focused and Text.highlights.active_item or Text.highlights.info)
-    table.insert(lines, Text.pad_line(submit_line))
-
-    -- Submit error
-    if self.execution_state.params.submit_error then
-        table.insert(lines, Text.empty_line())
-        table.insert(lines,
-            Text.pad_line(
-                NuiLine():append("⚠ ", Text.highlights.error):append(self.execution_state.params.submit_error,
-                    Text.highlights.error)))
-    end
-
-    -- Execution result
-    if self.execution_state.params.result then
-        table.insert(lines, Text.empty_line())
-        table.insert(lines, Text.pad_line(NuiLine():append("Result:", Text.highlights.header)))
-        table.insert(lines, Text.empty_line())
-        local result_json = vim.fn.json_encode(self.execution_state.params.result)
-        vim.list_extend(lines, vim.tbl_map(Text.pad_line, Text.multiline(result_json, Text.highlights.info)))
-    end
-
-    return lines
 end
 
 function ServersView:on_enter()
@@ -383,19 +248,6 @@ function ServersView:on_enter()
         end
     end, "Execute tool/resource")
 
-    -- Parameter navigation
-    self:add_keymap("<Tab>", function()
-        if self.execution_state.active then
-            self:navigate_params("next")
-        end
-    end, "Next parameter")
-
-    self:add_keymap("<S-Tab>", function()
-        if self.execution_state.active then
-            self:navigate_params("prev")
-        end
-    end, "Previous parameter")
-
     -- Add escape mapping to exit execution mode
     self:add_keymap("<Esc>", function()
         if self.execution_state.active then
@@ -413,108 +265,6 @@ function ServersView:on_leave()
     end
 
     View.on_leave(self) -- Call parent method
-end
-
--- Helper to format duration
-local function format_uptime(seconds)
-    if seconds < 60 then
-        return string.format("%ds", seconds)
-    elseif seconds < 3600 then
-        return string.format("%dm %ds", math.floor(seconds / 60), seconds % 60)
-    else
-        local hours = math.floor(seconds / 3600)
-        local mins = math.floor((seconds % 3600) / 60)
-        return string.format("%dh %dm", hours, mins)
-    end
-end
-
---- Render server information
----@param server table Server data
----@param line_offset number Current line number offset
----@return NuiLine[] lines, number new_offset
-local function render_server(server, line_offset)
-    local lines = {}
-
-    local current_line = line_offset + 1
-    -- Server header with status icon
-    local status_icons = {
-        connected = "● ",
-        connecting = "◉ ",
-        disconnected = "○ "
-    }
-    local status_hl = {
-        connected = Text.highlights.success,
-        connecting = Text.highlights.info,
-        disconnected = Text.highlights.warning
-    }
-
-    -- Server title line
-    local title =
-        NuiLine():append("╭─ ", Text.highlights.muted) -- :append(status_icons[server.status] or "⚠ ", status_hl[server.status] or Text.highlights.error)
-        :append(" " .. server.name .. " ", Text.highlights.header_btn)
-    -- :append(" (", Text.highlights.muted):append(server.status, status_hl[server.status] or Text.highlights.error)
-    -- :append(")", Text.highlights.muted)
-    table.insert(lines, Text.pad_line(title))
-
-    -- Server details
-    if server.uptime then
-        local uptime = NuiLine():append("│ ", Text.highlights.muted):append("Uptime: ", Text.highlights.muted):append(
-            format_uptime(server.uptime), Text.highlights.info)
-        table.insert(lines, Text.pad_line(uptime))
-    end
-    -- if server.lastStarted then
-    --     local started = NuiLine():append("│ ", Text.highlights.muted):append("Started: ", Text.highlights.muted)
-    --         :append(server.lastStarted, Text.highlights.info)
-    --     table.insert(lines, Text.pad_line(started))
-    -- end
-
-    -- Capabilities
-    if server.capabilities then
-        -- Tools
-        if #server.capabilities.tools > 0 then
-            table.insert(lines, Text.pad_line(NuiLine():append("│", Text.highlights.muted)))
-            table.insert(lines, Text.pad_line(
-                NuiLine():append("│ ", Text.highlights.muted):append(" Tools: ", Text.highlights.header)))
-
-            for _, tool in ipairs(server.capabilities.tools) do
-                -- Tool name
-                local tool_line = NuiLine():append("│  • ", Text.highlights.muted):append(tool.name,
-                    Text.highlights.success)
-                table.insert(lines, Text.pad_line(tool_line))
-
-                -- Track tool line number at the actual buffer position
-                tool._line_nr = line_offset + #lines
-
-                -- Tool description
-                if tool.description then
-                    for _, desc_line in ipairs(Text.multiline(tool.description, highlights.groups.muted)) do
-                        local desc = NuiLine():append("│    ", Text.highlights.muted):append(desc_line,
-                            Text.highlights.muted)
-                        table.insert(lines, Text.pad_line(desc))
-                    end
-                end
-            end
-        end
-
-        -- Resources
-        if #server.capabilities.resources > 0 then
-            table.insert(lines, Text.pad_line(NuiLine():append("│", Text.highlights.muted)))
-            table.insert(lines, Text.pad_line(
-                NuiLine():append("│ ", Text.highlights.muted):append(" Resources: ", Text.highlights.header)))
-            for _, resource in ipairs(server.capabilities.resources) do
-                local res_line = NuiLine():append("│  • ", Text.highlights.muted):append(resource.name,
-                    Text.highlights.success):append(" (", Text.highlights.muted):append(resource.mimeType,
-                    Text.highlights.info):append(")", Text.highlights.muted)
-                table.insert(lines, Text.pad_line(res_line))
-            end
-        end
-    end
-
-    -- Server footer
-    table.insert(lines, Text.pad_line(NuiLine():append("╰─", Text.highlights.muted)))
-    table.insert(lines, Text.empty_line())
-
-    return lines, line_offset + #lines
 end
 
 function ServersView:render()
@@ -538,15 +288,24 @@ function ServersView:render()
             vim.list_extend(lines, vim.tbl_map(Text.pad_line, Text.multiline(desc, Text.highlights.muted)))
             table.insert(lines, Text.empty_line())
 
-            -- Parameters form
-            vim.list_extend(lines, self:render_params_form())
+            -- Parameters form with line tracking
+            local form_lines, param_lines, submit_line = Utils.render_params_form(self.execution_state.tool_info,
+                self.execution_state.params)
+            vim.list_extend(lines, form_lines)
+
+            -- Update line tracking in execution state
+            self.execution_state.params.param_lines = {}
+            for line_nr, param_name in pairs(param_lines) do
+                self.execution_state.params.param_lines[#lines - #form_lines + line_nr] = param_name
+            end
+            self.execution_state.params.submit_line = #lines - #form_lines + submit_line
         end
         return lines
     end
 
+    -- Server listing view
     local width = self:get_width()
-    -- Reset server sections for new render
-    self.server_sections = {}
+    self.server_sections = {} -- Reset sections
 
     -- Add servers section based on state
     if State.server_state.status == "connected" then
@@ -562,7 +321,7 @@ function ServersView:render()
 
                 -- Store tool line numbers during render
                 local new_lines
-                new_lines, current_line = render_server(server, current_line)
+                new_lines, current_line = Utils.render_server(server, current_line)
                 vim.list_extend(lines, new_lines)
 
                 -- Store tool line numbers

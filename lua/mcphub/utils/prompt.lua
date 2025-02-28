@@ -115,4 +115,64 @@ function M.get_active_servers_prompt(servers)
     return prompt
 end
 
+function M.parse_tool_response(response)
+    if response == nil then
+        return ""
+    end
+    local result = response.result or {}
+    local output = ""
+    -- parse tool response
+    local isError = result.isError or false
+    local content = {}
+    for _, v in ipairs(result.content or {}) do
+        local type = v.type
+        -- TODO:handle other types
+        if type == "text" then
+            table.insert(content, string.format([[<text>
+%s
+</text>]], v.text))
+        end
+        output = string.format([[<content>
+%s
+</content>]], table.concat(content, "\n"))
+        if isError then
+            output = string.format('The tool run failed with error.\n%s', output)
+        end
+        output = string.format([[<result>
+%s
+</result>]], output)
+    end
+    return output
+end
+
+function M.parse_resource_response(response)
+    if response == nil then
+        return ""
+    end
+    local result = response.result or {}
+    local output = ""
+    local contents = {}
+    for _, v in ipairs(result.contents or {}) do
+        local uri = v.uri or ""
+        local text = v.text or ""
+        local mimeType = v.mimeType or ""
+        table.insert(contents, string.format([[
+<resource>
+<uri>%s</uri>
+<text>%s</text>
+</resource>
+]], uri, text))
+    end
+    output = string.format([[
+<contents>
+%s
+</contents>
+]], table.concat(contents, "\n"))
+    output = string.format([[
+<result>
+%s
+</result>]], output)
+    return output
+end
+
 return M
