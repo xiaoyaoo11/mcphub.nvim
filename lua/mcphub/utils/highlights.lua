@@ -12,6 +12,7 @@ M.groups = {
     warning = "MCPHubWarning",
     info = "MCPHubInfo",
     success = "MCPHubSuccess",
+    success_fill = "MCPHubSuccessFill",
     muted = "MCPHubMuted",
     window_normal = "MCPHubNormal",
     window_border = "MCPHubBorder",
@@ -81,6 +82,10 @@ function M.setup()
         [M.groups.success] = {
             bg = "NONE",
             fg = "#89d185" -- Green for success
+        },
+        [M.groups.success_fill] = {
+            bg = "#89d185",
+            fg = "#1a1b26"
         },
         [M.groups.muted] = {
             bg = "NONE",

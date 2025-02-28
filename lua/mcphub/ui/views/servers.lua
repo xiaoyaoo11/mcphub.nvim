@@ -16,6 +16,7 @@ local Utils = require("mcphub.ui.views.servers_utils")
 ---@field hover_ns number Namespace for highlights
 ---@field server_sections table<string, {start_line: number, end_line: number, tools: {name: string, line: number}[]}>
 ---@field execution_state { active: boolean, server_name: string|nil, tool_name: string|nil, tool_info: table|nil, params: { values: table<string, string>, errors: table<string, string>, param_lines: table<number, string>, submit_line: number|nil, submit_error: string|nil, result: table|nil }|nil }
+---@field cursor_group number|nil Cursor movement tracking group
 local ServersView = setmetatable({}, {
     __index = View
 })
@@ -58,25 +59,6 @@ function ServersView:get_line_info(line_nr)
     return nil, nil
 end
 
-function ServersView:get_tool_info(server_name, tool_name)
-    local server = nil
-    for _, s in ipairs(State.server_state.servers or {}) do
-        if s.name == server_name then
-            server = s
-            break
-        end
-    end
-
-    if server and server.capabilities then
-        for _, tool in ipairs(server.capabilities.tools) do
-            if tool.name == tool_name then
-                return tool
-            end
-        end
-    end
-    return nil
-end
-
 --- Handle cursor movement
 ---@private
 function ServersView:handle_cursor_move()
@@ -101,7 +83,7 @@ function ServersView:handle_cursor_move()
         elseif line == self.execution_state.params.submit_line then
             self.cursor_highlight = vim.api.nvim_buf_set_extmark(self.ui.buffer, self.hover_ns, line - 1, 0, {
                 line_hl_group = highlights.groups.active_item,
-                virt_text = {{"Press <CR> to execute", highlights.groups.muted}},
+                virt_text = {{"Press <CR> to submit", highlights.groups.muted}},
                 virt_text_pos = "eol"
             })
         end
@@ -119,6 +101,25 @@ function ServersView:handle_cursor_move()
     end
 end
 
+function ServersView:get_tool_info(server_name, tool_name)
+    local server = nil
+    for _, s in ipairs(State.server_state.servers or {}) do
+        if s.name == server_name then
+            server = s
+            break
+        end
+    end
+
+    if server and server.capabilities then
+        for _, tool in ipairs(server.capabilities.tools) do
+            if tool.name == tool_name then
+                return tool
+            end
+        end
+    end
+    return nil
+end
+
 function ServersView:enter_execution_mode(server_name, tool_name)
     self.execution_state = {
         active = true,
@@ -134,9 +135,11 @@ function ServersView:enter_execution_mode(server_name, tool_name)
             result = nil
         }
     }
+    self:setup_active_mode()
 end
 
 function ServersView:exit_execution_mode()
+
     self.execution_state = {
         active = false,
         server_name = nil,
@@ -144,6 +147,8 @@ function ServersView:exit_execution_mode()
         tool_info = nil,
         params = nil
     }
+    self:setup_active_mode()
+
 end
 
 function ServersView:handle_param_action()
@@ -209,59 +214,80 @@ function ServersView:render_breadcrumb()
         return {}
     end
 
-    local breadcrumb = NuiLine():append(self.execution_state.server_name, Text.highlights.title):append(" > ",
-        Text.highlights.muted):append(" " .. self.execution_state.tool_name .. " ", Text.highlights.header)
+    local breadcrumb = NuiLine():append(self.execution_state.server_name, Text.highlights.muted):append(" > ",
+        Text.highlights.muted):append(" " .. self.execution_state.tool_name .. " ", Text.highlights.title)
 
     return {Text.pad_line(breadcrumb)}
+end
+
+function ServersView:setup_active_mode()
+    if self.execution_state.active then
+        self.keymaps = {
+            ["<CR>"] = {
+                action = function()
+                    self:handle_param_action()
+                end,
+                desc = "Edit/Submit"
+            },
+            ["<Esc>"] = {
+                action = function()
+                    self:exit_execution_mode()
+                    self:draw()
+                end,
+                desc = "Back"
+            }
+        }
+    else
+        self.keymaps = {
+            ["<CR>"] = {
+                action = function()
+                    local cursor = vim.api.nvim_win_get_cursor(0)
+                    local line = cursor[1]
+
+                    -- Get tool info from our mapping
+                    local server_name, tool_name = self:get_line_info(line)
+                    if server_name and tool_name then
+                        self:enter_execution_mode(server_name, tool_name)
+                        self:draw() -- Redraw in execution mode
+                    end
+                end,
+                desc = "Execute tool/resource"
+            }
+        }
+    end
+    self:apply_keymaps()
 end
 
 function ServersView:on_enter()
     View.on_enter(self) -- Call parent method
 
     -- Set up cursor movement tracking
-    local group = vim.api.nvim_create_augroup("MCPHubServersCursor", {
+    self.cursor_group = vim.api.nvim_create_augroup("MCPHubServersCursor", {
         clear = true
     })
     vim.api.nvim_create_autocmd("CursorMoved", {
-        group = group,
+        group = self.cursor_group,
         buffer = self.ui.buffer,
         callback = function()
             self:handle_cursor_move()
         end
     })
 
-    -- Add <CR> mapping for tool execution
-    self:add_keymap("<CR>", function()
-        if self.execution_state.active then
-            self:handle_param_action()
-            return
-        end
-
-        local cursor = vim.api.nvim_win_get_cursor(0)
-        local line = cursor[1]
-
-        -- Get tool info from our mapping
-        local server_name, tool_name = self:get_line_info(line)
-        if server_name and tool_name then
-            self:enter_execution_mode(server_name, tool_name)
-            self:draw() -- Redraw in execution mode
-        end
-    end, "Execute tool/resource")
-
-    -- Add escape mapping to exit execution mode
-    self:add_keymap("<Esc>", function()
-        if self.execution_state.active then
-            self:exit_execution_mode()
-            self:draw()
-        end
-    end, "Exit tool execution mode")
+    self:setup_active_mode()
 end
 
 function ServersView:on_leave()
+
     -- Clear highlight when leaving view
     if self.cursor_highlight then
         vim.api.nvim_buf_del_extmark(self.ui.buffer, self.hover_ns, self.cursor_highlight)
         self.cursor_highlight = nil
+    end
+
+    -- Clean up cursor tracking
+    if self.cursor_group then
+        vim.api.nvim_del_augroup_by_name("MCPHubServersCursor")
+        self.cursor_group = nil
     end
 
     View.on_leave(self) -- Call parent method
@@ -290,7 +316,7 @@ function ServersView:render()
 
             -- Parameters form with line tracking
             local form_lines, param_lines, submit_line = Utils.render_params_form(self.execution_state.tool_info,
-                self.execution_state.params)
+                self.execution_state.params, self)
             vim.list_extend(lines, form_lines)
 
             -- Update line tracking in execution state

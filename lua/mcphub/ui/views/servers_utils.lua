@@ -172,10 +172,17 @@ function M.render_params_form(tool_info, state)
         end
 
         table.insert(lines, Text.pad_line(name_line))
+        -- add description
+        if param.description then
+            for _, desc_line in ipairs(Text.multiline(param.description, Text.highlights.muted)) do
+                local desc = NuiLine():append("  ", Text.highlights.muted):append(desc_line, Text.highlights.muted)
+                table.insert(lines, Text.pad_line(desc))
+            end
+        end
 
         -- Value input (store line number for cursor detection)
         local value = (state.values or {})[param.name]
-        local input_line = NuiLine():append("  ", Text.highlights.title):append("> ", Text.highlights.muted):append(
+        local input_line = NuiLine():append("  ", Text.highlights.title):append("> ", Text.highlights.success):append(
             value or "", Text.highlights.info)
         table.insert(lines, Text.pad_line(input_line))
         param_lines[#lines] = param.name
@@ -186,10 +193,12 @@ function M.render_params_form(tool_info, state)
                 NuiLine():append("  ⚠ ", Text.highlights.error)
                     :append(state.errors[param.name], Text.highlights.error)))
         end
+        table.insert(lines, Text.empty_line())
     end
 
     -- Submit button (store line number for cursor detection)
-    local submit_line = NuiLine():append("  ", Text.highlights.title):append("[ Submit ]", Text.highlights.info)
+    table.insert(lines, Text.empty_line())
+    local submit_line = NuiLine():append("  ", Text.highlights.title):append(" Submit ", Text.highlights.success_fill)
     table.insert(lines, Text.pad_line(submit_line))
     local submit_line_num = #lines
 

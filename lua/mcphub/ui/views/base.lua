@@ -16,6 +16,7 @@ local VIEW_TYPES = {
 ---@field name string View name
 ---@field keymaps table<string, {action: function, desc: string}> View-specific keymaps
 ---@field active_keymaps string[] Currently active keymap keys
+---@field cursor_pos number[]|nil Last known cursor position
 local View = {}
 View.__index = View
 
@@ -24,9 +25,47 @@ function View:new(ui, name)
         ui = ui,
         name = name or "unknown",
         keymaps = {},
-        active_keymaps = {}
+        active_keymaps = {},
+        cursor_pos = nil
     }
     return setmetatable(instance, self)
+end
+
+--- Track current cursor position
+function View:track_cursor()
+    if self.ui.window and vim.api.nvim_win_is_valid(self.ui.window) then
+        self.cursor_pos = vim.api.nvim_win_get_cursor(0)
+    end
+end
+
+--- Set cursor position with bounds checking
+---@param pos number[]|nil Position to set [line, col] or nil for last tracked position
+---@param opts? {restore_col: boolean} Options for cursor setting (default: {restore_col: true})
+function View:set_cursor(pos, opts)
+    -- Use provided position or last tracked position
+    local cursor = pos or self.cursor_pos
+    if not cursor then
+        return
+    end
+
+    opts = opts or {
+        restore_col = true
+    }
+
+    -- Ensure window is valid
+    if not (self.ui.window and vim.api.nvim_win_is_valid(self.ui.window)) then
+        return
+    end
+
+    -- Get current position if we want to restore column
+    local current_pos = vim.api.nvim_win_get_cursor(self.ui.window)
+
+    -- Ensure line is within bounds
+    local line_count = vim.api.nvim_buf_line_count(self.ui.buffer)
+    local new_pos = {math.min(cursor[1], line_count), opts.restore_col and current_pos[2] or cursor[2]}
+
+    -- Set cursor
+    vim.api.nvim_win_set_cursor(self.ui.window, new_pos)
 end
 
 --- Register a view-specific keymap
@@ -91,6 +130,10 @@ end
 function View:line()
     local line = NuiLine():append(string.rep(" ", self:get_width()))
     return line
+end
+
+function View:center(line, highlight)
+    return Text.align_text(line, self:get_width(), "center", highlight)
 end
 
 --- Render header for view
@@ -178,12 +221,12 @@ function View:render_footer()
     })
     table.insert(key_items, {
         key = "R",
-        desc = "Restart Hub"
+        desc = "Restart"
     })
     -- Add common close
     table.insert(key_items, {
         key = "q",
-        desc = "Close window"
+        desc = "Close"
     })
 
     -- Format in a single line
@@ -227,6 +270,9 @@ end
 
 --- Draw view content to buffer
 function View:draw()
+    -- Track cursor position before drawing
+    self:track_cursor()
+
     -- Get buffer
     local buf = self.ui.buffer
 
@@ -274,6 +320,8 @@ function View:draw()
     vim.api.nvim_buf_set_option(buf, "wrap", true)
     vim.api.nvim_buf_set_option(buf, "modifiable", false)
 
+    -- Restore cursor position
+    self:set_cursor()
 end
 
 --- Handle buffer enter

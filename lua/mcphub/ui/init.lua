@@ -129,7 +129,7 @@ function UI:setup_keymaps()
     -- Close window
     map('q', function()
         self:cleanup()
-    end, "Close window")
+    end, "Close")
 
     map("r", function()
         self:refresh()
