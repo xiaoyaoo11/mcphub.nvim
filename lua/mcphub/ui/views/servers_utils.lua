@@ -7,6 +7,139 @@ local highlights = require("mcphub.utils.highlights")
 
 local M = {}
 
+-- Parameter type handlers for validation and conversion
+local type_handlers = {
+    string = {
+        validate = function(value)
+            return true
+        end,
+        convert = function(value)
+            return value
+        end,
+        format = function()
+            return "string"
+        end
+    },
+    number = {
+        validate = function(value)
+            return tonumber(value) ~= nil
+        end,
+        convert = function(value)
+            return tonumber(value)
+        end,
+        format = function()
+            return "number"
+        end
+    },
+    integer = {
+        validate = function(value)
+            local num = tonumber(value)
+            return num and math.floor(num) == num
+        end,
+        convert = function(value)
+            return math.floor(tonumber(value))
+        end,
+        format = function()
+            return "integer"
+        end
+    },
+    boolean = {
+        validate = function(value)
+            return value == "true" or value == "false"
+        end,
+        convert = function(value)
+            return value == "true"
+        end,
+        format = function()
+            return "boolean"
+        end
+    },
+    array = {
+        validate = function(value, schema)
+            -- Parse JSON array string and validate each item
+            local ok, arr = pcall(vim.fn.json_decode, value)
+            if not ok or type(arr) ~= "table" then
+                return false
+            end
+            -- If items has enum, validate against allowed values
+            if schema.items and schema.items.enum then
+                for _, item in ipairs(arr) do
+                    if not vim.tbl_contains(schema.items.enum, item) then
+                        return false
+                    end
+                end
+            end
+            -- If items has type, validate each item's type
+            if schema.items and schema.items.type then
+                local item_validator = type_handlers[schema.items.type].validate
+                for _, item in ipairs(arr) do
+                    if not item_validator(item) then
+                        return false
+                    end
+                end
+            end
+            return true
+        end,
+        convert = function(value)
+            return vim.fn.json_decode(value)
+        end,
+        format = function(schema)
+            if schema.items then
+                if schema.items.enum then
+                    return string.format("[%s]", table.concat(vim.tbl_map(function(v)
+                        return string.format("%q", v)
+                    end, schema.items.enum), ", "))
+                elseif schema.items.type then
+                    return string.format("%s[]", type_handlers[schema.items.type].format())
+                end
+            end
+            return "array"
+        end
+    }
+}
+
+--- Validate a single parameter value
+---@param value string The value to validate
+---@param param_schema table Parameter schema
+---@return boolean is_valid, string|nil error_message
+function M.validate_param(value, param_schema)
+    if not param_schema or not param_schema.type then
+        return false, "Invalid parameter schema"
+    end
+
+    local handler = type_handlers[param_schema.type]
+    if not handler then
+        return false, "Unknown parameter type: " .. param_schema.type
+    end
+
+    local is_valid = handler.validate(value, param_schema)
+    if not is_valid then
+        return false, string.format("Invalid %s value: %s", param_schema.type, value)
+    end
+
+    return true, nil
+end
+
+--- Convert validated string input to proper type
+---@param value string The string value to convert
+---@param param_schema table Parameter schema
+---@return any Converted value
+function M.convert_param(value, param_schema)
+    local handler = type_handlers[param_schema.type]
+    return handler.convert(value)
+end
+
+--- Format parameter type for display
+---@param param_schema table Parameter schema
+---@return string Formatted type string
+function M.format_param_type(param_schema)
+    local handler = type_handlers[param_schema.type]
+    if not handler then
+        return param_schema.type
+    end
+    return handler.format(param_schema)
+end
+
 --- Format duration in seconds to human readable string
 ---@param seconds number Duration in seconds
 ---@return string Formatted duration
@@ -166,10 +299,10 @@ function M.render_params_form(tool_info, state)
         local name_line = NuiLine():append(param.required and "* " or "  ", Text.highlights.error):append(param.name,
             Text.highlights.success)
 
-        if param.type then
-            name_line:append(" (", Text.highlights.muted):append(param.type, Text.highlights.muted):append(")",
-                Text.highlights.muted)
-        end
+        -- Format type with array enums/item types
+        local type_str = M.format_param_type(param)
+        name_line:append(" (", Text.highlights.muted):append(type_str, Text.highlights.info):append(")", Text.highlights
+            .muted)
 
         table.insert(lines, Text.pad_line(name_line))
         -- add description

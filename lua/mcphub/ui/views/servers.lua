@@ -139,7 +139,6 @@ function ServersView:enter_execution_mode(server_name, tool_name)
 end
 
 function ServersView:exit_execution_mode()
-
     self.execution_state = {
         active = false,
         server_name = nil,
@@ -148,7 +147,6 @@ function ServersView:exit_execution_mode()
         params = nil
     }
     self:setup_active_mode()
-
 end
 
 function ServersView:handle_param_action()
@@ -167,10 +165,20 @@ function ServersView:handle_param_action()
             return
         end
 
-        -- Execute tool with current values
+        -- Convert all values to their proper types
+        local converted_values = {}
+
+        for name, value in pairs(self.execution_state.params.values) do
+            local schema = self.execution_state.tool_info.inputSchema.properties[name]
+            if schema then
+                converted_values[name] = Utils.convert_param(value, schema)
+            end
+        end
+
+        -- Execute tool with converted values
         if State.hub_instance then
             State.hub_instance:call_tool(self.execution_state.server_name, self.execution_state.tool_name,
-                self.execution_state.params.values, {
+                converted_values, {
                     return_text = true,
                     callback = function(response, err)
                         if err then
@@ -194,16 +202,34 @@ function ServersView:handle_param_action()
         return
     end
 
-    -- Show input prompt for parameter
+    -- Get parameter schema
+    local param_schema
+    if self.execution_state.tool_info and self.execution_state.tool_info.inputSchema and
+        self.execution_state.tool_info.inputSchema.properties then
+        param_schema = self.execution_state.tool_info.inputSchema.properties[param_name]
+    end
+
+    if not param_schema then
+        vim.notify("Invalid parameter schema", vim.log.levels.ERROR)
+        return
+    end
+
+    -- Show input prompt for parameter with type information
     vim.ui.input({
-        prompt = param_name .. ": ",
+        prompt = string.format("%s (%s): ", param_name, Utils.format_param_type(param_schema)),
         default = self.execution_state.params.values[param_name] or ""
     }, function(input)
         if input then
-            -- Update value
-            self.execution_state.params.values[param_name] = input
-            -- Clear any previous error
-            self.execution_state.params.errors[param_name] = nil
+            -- Validate input
+            local ok, err = Utils.validate_param(input, param_schema)
+            if not ok then
+                self.execution_state.params.errors[param_name] = err
+            else
+                -- Update value
+                self.execution_state.params.values[param_name] = input
+                -- Clear any previous error
+                self.execution_state.params.errors[param_name] = nil
+            end
             self:draw()
         end
     end)
@@ -277,7 +303,6 @@ function ServersView:on_enter()
 end
 
 function ServersView:on_leave()
-
     -- Clear highlight when leaving view
     if self.cursor_highlight then
         vim.api.nvim_buf_del_extmark(self.ui.buffer, self.hover_ns, self.cursor_highlight)
