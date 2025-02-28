@@ -140,6 +140,34 @@ function M.format_param_type(param_schema)
     return handler.format(param_schema)
 end
 
+-- Section rendering utilities
+function M.render_section_start(title, highlight)
+    local lines = {}
+    table.insert(lines, NuiLine():append("╭─ ", Text.highlights.muted)
+        :append(" " .. title .. " ", highlight or Text.highlights.header))
+    return lines
+end
+
+function M.render_section_content(content, indent_level)
+    local lines = {}
+    local padding = string.rep(" ", indent_level or 1)
+    for _, line in ipairs(content) do
+        local rendered_line = NuiLine()
+        if type(line) == "string" then
+            rendered_line:append("│", Text.highlights.muted):append(padding, Text.highlights.muted):append(line)
+        else
+            rendered_line:append("│", Text.highlights.muted):append(padding, Text.highlights.muted):append(line)
+        end
+        table.insert(lines, Text.pad_line(rendered_line))
+    end
+    return lines
+end
+
+function M.render_section_end()
+    return vim.tbl_map(Text.pad_line,
+        {NuiLine():append("╰─", Text.highlights.muted):append(" ", Text.highlights.muted)})
+end
+
 --- Format duration in seconds to human readable string
 ---@param seconds number Duration in seconds
 ---@return string Formatted duration
@@ -288,71 +316,97 @@ end
 function M.render_params_form(tool_info, state)
     local lines = {}
     local param_lines = {}
+    local submit_line_num = nil
 
-    table.insert(lines, Text.pad_line(" Input Params: ", Text.highlights.header))
-    table.insert(lines, Text.empty_line())
+    -- Start params section
+    vim.list_extend(lines, vim.tbl_map(Text.pad_line, M.render_section_start("Input Parameters")))
 
     -- Parameters
     local params = M.get_ordered_params(tool_info, state.values or {})
-    for _, param in ipairs(params) do
-        -- Parameter name
-        local name_line = NuiLine():append(param.required and "* " or "  ", Text.highlights.error):append(param.name,
-            Text.highlights.success)
 
-        -- Format type with array enums/item types
-        local type_str = M.format_param_type(param)
-        name_line:append(" (", Text.highlights.muted):append(type_str, Text.highlights.info):append(")", Text.highlights
-            .muted)
+    if #params == 0 then
+        -- Show no parameters message inline with submit button
+        local content = NuiLine():append("No parameters required ", Text.highlights.muted)
+        local submit_content = {}
+        if state.is_executing then
+            submit_content = {NuiLine():append("[ ", Text.highlights.muted):append("Processing...",
+                Text.highlights.muted):append(" ]", Text.highlights.muted)}
+        else
+            submit_content = {NuiLine():append("[ ", Text.highlights.success_fill):append("Submit",
+                Text.highlights.success_fill):append(" ]", Text.highlights.success_fill)}
+        end
+        vim.list_extend(lines, M.render_section_content({content, Text.empty_line()}, 2))
+        vim.list_extend(lines, M.render_section_content(submit_content, 2))
+        submit_line_num = #lines
+    else
+        for _, param in ipairs(params) do
+            -- Parameter name line with type
+            local name_line = NuiLine():append(param.required and "* " or "  ", Text.highlights.error):append(
+                param.name, Text.highlights.success):append(" (", Text.highlights.muted):append(M.format_param_type(
+                param), Text.highlights.muted):append(")", Text.highlights.muted)
+            vim.list_extend(lines, M.render_section_content({name_line}, 2))
 
-        table.insert(lines, Text.pad_line(name_line))
-        -- add description
-        if param.description then
-            for _, desc_line in ipairs(Text.multiline(param.description, Text.highlights.muted)) do
-                local desc = NuiLine():append("  ", Text.highlights.muted):append(desc_line, Text.highlights.muted)
-                table.insert(lines, Text.pad_line(desc))
+            -- Description if any
+            if param.description then
+                for _, desc_line in ipairs(Text.multiline(param.description, Text.highlights.muted)) do
+                    vim.list_extend(lines, M.render_section_content({desc_line}, 4))
+                end
             end
+
+            -- Value input
+            local value = (state.values or {})[param.name]
+            local input_line = NuiLine():append("> ", Text.highlights.success):append(value or "", Text.highlights.info)
+            vim.list_extend(lines, M.render_section_content({input_line}, 2))
+            param_lines[#lines] = param.name
+
+            -- Error if any
+            if state.errors and state.errors[param.name] then
+                local error_line = NuiLine():append("⚠ ", Text.highlights.error):append(state.errors[param.name],
+                    Text.highlights.error)
+                vim.list_extend(lines, M.render_section_content({error_line}, 2))
+            end
+
+            table.insert(lines, Text.pad_line(NuiLine():append("│", Text.highlights.muted)))
         end
 
-        -- Value input (store line number for cursor detection)
-        local value = (state.values or {})[param.name]
-        local input_line = NuiLine():append("  ", Text.highlights.title):append("> ", Text.highlights.success):append(
-            value or "", Text.highlights.info)
-        table.insert(lines, Text.pad_line(input_line))
-        param_lines[#lines] = param.name
-
-        -- Error if any
-        if state.errors and state.errors[param.name] then
-            table.insert(lines, Text.pad_line(
-                NuiLine():append("  ⚠ ", Text.highlights.error)
-                    :append(state.errors[param.name], Text.highlights.error)))
+        -- Submit button for when we have parameters
+        local submit_content = {}
+        if state.is_executing then
+            submit_content = {NuiLine():append("[ ", Text.highlights.muted):append("Processing...",
+                Text.highlights.muted):append(" ]", Text.highlights.muted)}
+        else
+            submit_content = {NuiLine():append("[ ", Text.highlights.success_fill):append("Submit",
+                Text.highlights.success_fill):append(" ]", Text.highlights.success_fill)}
         end
-        table.insert(lines, Text.empty_line())
+        vim.list_extend(lines, M.render_section_content(submit_content, 2))
+        submit_line_num = #lines
     end
-
-    -- Submit button (store line number for cursor detection)
-    table.insert(lines, Text.empty_line())
-    local submit_line = NuiLine():append("  ", Text.highlights.title):append(" Submit ", Text.highlights.success_fill)
-    table.insert(lines, Text.pad_line(submit_line))
-    local submit_line_num = #lines
 
     -- Submit error
     if state.submit_error then
-        table.insert(lines, Text.empty_line())
-        table.insert(lines, Text.pad_line(
-            NuiLine():append("⚠ ", Text.highlights.error):append(state.submit_error, Text.highlights.error)))
+        local error_line = NuiLine():append("⚠ ", Text.highlights.error):append(state.submit_error,
+            Text.highlights.error)
+        vim.list_extend(lines, M.render_section_content({error_line}, 2))
     end
 
-    -- Execution result
-    if state.result then
-        table.insert(lines, Text.empty_line())
-        table.insert(lines, Text.pad_line(NuiLine():append(" Result: ", Text.highlights.header)))
-        table.insert(lines, Text.empty_line())
-        local result_json = state.result
+    -- End params section
+    vim.list_extend(lines, M.render_section_end())
 
+    -- Result section if present
+    if state.result then
+        table.insert(lines, Text.pad_line(NuiLine())) -- Empty line between sections
+        vim.list_extend(lines, vim.tbl_map(Text.pad_line, M.render_section_start("Result")))
+
+        local result_json = state.result
         if type(result_json) == "table" then
             result_json = vim.fn.json_encode(result_json)
         end
-        vim.list_extend(lines, vim.tbl_map(Text.pad_line, Text.multiline(result_json, Text.highlights.info)))
+
+        for _, line in ipairs(Text.multiline(result_json, Text.highlights.info)) do
+            vim.list_extend(lines, M.render_section_content({line}, 1))
+        end
+
+        vim.list_extend(lines, M.render_section_end())
     end
 
     return lines, param_lines, submit_line_num

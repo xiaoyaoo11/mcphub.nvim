@@ -15,7 +15,7 @@ local Utils = require("mcphub.ui.views.servers_utils")
 ---@field cursor_highlight number|nil Extmark ID for current highlight
 ---@field hover_ns number Namespace for highlights
 ---@field server_sections table<string, {start_line: number, end_line: number, tools: {name: string, line: number}[]}>
----@field execution_state { active: boolean, server_name: string|nil, tool_name: string|nil, tool_info: table|nil, params: { values: table<string, string>, errors: table<string, string>, param_lines: table<number, string>, submit_line: number|nil, submit_error: string|nil, result: table|nil }|nil }
+---@field execution_state { active: boolean, server_name: string|nil, tool_name: string|nil, tool_info: table|nil, params: { values: table<string, string>, errors: table<string, string>, param_lines: table<number, string>, submit_line: number|nil, submit_error: string|nil, result: table|nil, is_executing: boolean }|nil }
 ---@field cursor_group number|nil Cursor movement tracking group
 local ServersView = setmetatable({}, {
     __index = View
@@ -80,7 +80,7 @@ function ServersView:handle_cursor_move()
                 virt_text = {{"Press <CR> to edit", highlights.groups.muted}},
                 virt_text_pos = "eol"
             })
-        elseif line == self.execution_state.params.submit_line then
+        elseif line == self.execution_state.params.submit_line and not self.execution_state.params.is_executing then
             self.cursor_highlight = vim.api.nvim_buf_set_extmark(self.ui.buffer, self.hover_ns, line - 1, 0, {
                 line_hl_group = highlights.groups.active_item,
                 virt_text = {{"Press <CR> to submit", highlights.groups.muted}},
@@ -132,7 +132,8 @@ function ServersView:enter_execution_mode(server_name, tool_name)
             param_lines = {},
             submit_line = nil,
             submit_error = nil,
-            result = nil
+            result = nil,
+            is_executing = false
         }
     }
     self:setup_active_mode()
@@ -155,6 +156,12 @@ function ServersView:handle_param_action()
     local line = cursor[1]
 
     if line == self.execution_state.params.submit_line then
+        -- Check if already executing
+        if self.execution_state.params.is_executing then
+            vim.notify("Tool is already executing", vim.log.levels.WARN)
+            return
+        end
+
         -- On submit button
         local ok, err, errors = Utils.validate_all_params(self.execution_state.tool_info,
             self.execution_state.params.values)
@@ -175,12 +182,17 @@ function ServersView:handle_param_action()
             end
         end
 
+        -- Set executing state
+        self.execution_state.params.is_executing = true
+        self:draw() -- Redraw to show loading state
+
         -- Execute tool with converted values
         if State.hub_instance then
             State.hub_instance:call_tool(self.execution_state.server_name, self.execution_state.tool_name,
                 converted_values, {
                     return_text = true,
                     callback = function(response, err)
+                        self.execution_state.params.is_executing = false -- Reset executing state
                         if err then
                             vim.notify("Tool execution failed: " .. err, vim.log.levels.ERROR)
                             self.execution_state.params.submit_error = err
