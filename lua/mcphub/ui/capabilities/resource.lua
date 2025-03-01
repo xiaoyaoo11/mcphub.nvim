@@ -2,7 +2,7 @@ local State = require("mcphub.state")
 local Base = require("mcphub.ui.capabilities.base")
 local Text = require("mcphub.utils.text")
 local NuiLine = require("mcphub.utils.nuiline")
-local highlights = require("mcphub.utils.highlights")
+local highlights = require("mcphub.utils.highlights").groups
 
 ---@class ResourceHandler : CapabilityHandler
 ---@field super CapabilityHandler
@@ -27,6 +27,7 @@ function ResourceHandler:execute()
     -- Set executing state
     self.state.is_executing = true
     self.state.error = nil
+    self.view:draw()
 
     -- Access resource
     if State.hub_instance then
@@ -34,6 +35,7 @@ function ResourceHandler:execute()
             return_text = true,
             callback = function(response, err)
                 self:handle_response(response, err)
+                self.view:draw()
             end
         })
     end
@@ -47,6 +49,7 @@ function ResourceHandler:handle_action(line)
 end
 
 function ResourceHandler:render(line_offset)
+    line_offset = line_offset or 0
     -- Clear previous line tracking
     self:clear_line_tracking()
 
@@ -59,12 +62,14 @@ function ResourceHandler:render(line_offset)
     local details = {NuiLine():append("Name: ", highlights.muted):append(self.info.name, highlights.success),
                      NuiLine():append("Type: ", highlights.muted):append(self.info.mimeType, highlights.info)}
 
+    vim.list_extend(lines, self:render_section_content(details, 2))
+
+    -- Description if any
     if self.info.description then
-        table.insert(lines, Text.pad_line(NuiLine()))
-        vim.list_extend(details, Text.multiline(self.info.description, highlights.muted))
+        table.insert(lines, Text.pad_line(NuiLine():append("│", highlights.muted)))
+        vim.list_extend(lines, self:render_section_content(Text.multiline(self.info.description, highlights.muted), 2))
     end
 
-    vim.list_extend(lines, self:render_section_content(details, 2))
     vim.list_extend(lines, self:render_section_end())
 
     -- Action section
@@ -80,13 +85,14 @@ function ResourceHandler:render(line_offset)
         button_line = NuiLine():append("[ ", highlights.success_fill):append("Access", highlights.success_fill):append(
             " ]", highlights.success_fill)
     end
-    vim.list_extend(lines, self:render_section_content({button_line}, 2))
+    vim.list_extend(lines, self:render_section_content({NuiLine():append(" "), button_line}, 2))
 
     -- Track submit line for interaction
     self:track_line(line_offset + #lines, "submit")
 
     -- Error message if any
     if self.state.error then
+        table.insert(lines, Text.pad_line(NuiLine():append("│", highlights.muted)))
         local error_line = NuiLine():append("⚠ ", highlights.error):append(self.state.error, highlights.error)
         vim.list_extend(lines, self:render_section_content({error_line}, 2))
     end

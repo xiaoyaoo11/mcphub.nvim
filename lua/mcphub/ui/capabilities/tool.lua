@@ -24,6 +24,35 @@ function ToolHandler:new(server_name, capability_info, view)
     return handler
 end
 
+-- Parameter ordering
+function ToolHandler:get_ordered_params()
+    if not self.info.inputSchema or not self.info.inputSchema.properties then
+        return {}
+    end
+
+    local params = {}
+    for name, prop in pairs(self.info.inputSchema.properties) do
+        table.insert(params, {
+            name = name,
+            type = prop.type,
+            description = prop.description,
+            required = vim.tbl_contains(self.info.inputSchema.required or {}, name),
+            default = prop.default,
+            value = self.state.params.values[name]
+        })
+    end
+
+    -- Sort by required first, then name
+    table.sort(params, function(a, b)
+        if a.required ~= b.required then
+            return a.required
+        end
+        return a.name < b.name
+    end)
+
+    return params
+end
+
 -- Parameter handling
 function ToolHandler:validate_param(name, value)
     local param_schema = self.info.inputSchema.properties[name]
@@ -61,17 +90,21 @@ function ToolHandler:format_param_type(param)
 end
 
 function ToolHandler:validate_all_params()
+    if not self.info.inputSchema then
+        return false, "No parameters to validate"
+    end
+
     local errors = {}
-    for name, prop in pairs(self.info.inputSchema.properties) do
-        if vim.tbl_contains(self.info.inputSchema.required or {}, name) then
-            if not self.state.params.values[name] or self.state.params.values[name] == "" then
-                errors[name] = "Required parameter"
-            else
-                -- Also validate the value if present
-                local ok, err = self:validate_param(name, self.state.params.values[name])
-                if not ok then
-                    errors[name] = err
-                end
+    local params = self:get_ordered_params()
+
+    for _, param in ipairs(params) do
+        if param.required and (not self.state.params.values[param.name] or self.state.params.values[param.name] == "") then
+            errors[param.name] = "Required parameter"
+        elseif self.state.params.values[param.name] and self.state.params.values[param.name] ~= "" then
+            -- Also validate the value if present
+            local ok, err = self:validate_param(param.name, self.state.params.values[param.name])
+            if not ok then
+                errors[param.name] = err
             end
         end
     end
@@ -169,47 +202,53 @@ function ToolHandler:render_param_form(line_offset)
     -- Parameters section
     vim.list_extend(lines, self:render_section_start("Input Parameters"))
 
-    if not self.info.inputSchema or not self.info.inputSchema.properties then
+    if not self.info.inputSchema or not next(self.info.inputSchema.properties or {}) then
         -- No parameters case
-        local content = NuiLine():append("No parameters required ", highlights.muted)
+        local placeholder = NuiLine():append("No parameters required ", highlights.muted)
+
+        -- Submit button
+        local submit_content = NuiLine()
         if self.state.is_executing then
-            content:append("[ ", highlights.muted):append("Processing...", highlights.muted):append(" ]",
+            submit_content:append("[ ", highlights.muted):append("Processing...", highlights.muted):append(" ]",
                 highlights.muted)
         else
-            content:append("[ ", highlights.success_fill):append("Submit", highlights.success_fill):append(" ]",
+            submit_content:append("[ ", highlights.success_fill):append("Submit", highlights.success_fill):append(" ]",
                 highlights.success_fill)
         end
-        vim.list_extend(lines, self:render_section_content({content}, 2))
+        vim.list_extend(lines, self:render_section_content(
+            {placeholder, NuiLine():append(" ", highlights.muted), submit_content}, 2))
+
         -- Track submit line
         self:track_line(line_offset + #lines, "submit")
     else
         -- Render each parameter
-        for name, prop in pairs(self.info.inputSchema.properties) do
+        local params = self:get_ordered_params()
+        for _, param in ipairs(params) do
             -- Parameter name and type
-            local name_line = NuiLine():append(vim.tbl_contains(self.info.inputSchema.required or {}, name) and "* " or
-                                                   "  ", highlights.error):append(name, highlights.success):append(" (",
-                highlights.muted):append(self:format_param_type(prop), highlights.info):append(")", highlights.muted)
+            local name_line = NuiLine():append(param.required and "* " or "  ", highlights.error):append(param.name,
+                highlights.success):append(" (", highlights.muted)
+                :append(self:format_param_type(param), highlights.info):append(")", highlights.muted)
             vim.list_extend(lines, self:render_section_content({name_line}, 2))
 
             -- Description if any
-            if prop.description then
-                for _, desc_line in ipairs(Text.multiline(prop.description, highlights.muted)) do
+            if param.description then
+                for _, desc_line in ipairs(Text.multiline(param.description, highlights.muted)) do
                     vim.list_extend(lines, self:render_section_content({desc_line}, 4))
                 end
             end
 
             -- Input field
-            local value = self.state.params.values[name]
+            local value = self.state.params.values[param.name]
             local input_line = NuiLine():append("> ", highlights.success):append(value or "", highlights.info)
             vim.list_extend(lines, self:render_section_content({input_line}, 2))
 
             -- Track input line
-            self:track_line(line_offset + #lines, "input", name)
+            self:track_line(line_offset + #lines, "input", param.name)
 
             -- Error if any
-            if self.state.params.errors[name] then
-                local error_line = NuiLine():append("⚠ ", highlights.error):append(self.state.params.errors[name],
-                    highlights.error)
+            if self.state.params.errors[param.name] then
+                local error_line = NuiLine():append("⚠ ", highlights.error):append(
+                    self.state.params.errors[param.name], highlights.error)
                 vim.list_extend(lines, self:render_section_content({error_line}, 2))
             end
 
@@ -231,6 +270,12 @@ function ToolHandler:render_param_form(line_offset)
         self:track_line(line_offset + #lines, "submit")
     end
 
+    -- Error message
+    if self.state.error then
+        local error_line = NuiLine():append("⚠ ", highlights.error):append(self.state.error, highlights.error)
+        vim.list_extend(lines, self:render_section_content({error_line}, 2))
+    end
+
     vim.list_extend(lines, self:render_section_end())
     return lines
 end
@@ -247,13 +292,6 @@ function ToolHandler:render(line_offset)
 
     -- Parameter form
     vim.list_extend(lines, self:render_param_form(line_offset + #lines))
-
-    -- Error message
-    if self.state.error then
-        table.insert(lines, Text.pad_line(NuiLine()))
-        local error_line = NuiLine():append("⚠ ", highlights.error):append(self.state.error, highlights.error)
-        table.insert(lines, Text.pad_line(error_line))
-    end
 
     -- Result if any
     vim.list_extend(lines, self:render_result())
