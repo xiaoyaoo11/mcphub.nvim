@@ -9,7 +9,7 @@ local NuiLine = require("mcphub.utils.nuiline")
 local renderer = require("mcphub.utils.renderer")
 local highlights = require("mcphub.utils.highlights")
 local Capabilities = require("mcphub.ui.capabilities")
-local Utils = require("mcphub.ui.views.servers_utils")
+local utils = require("mcphub.utils")
 
 ---@class ServersView
 ---@field super View
@@ -279,7 +279,7 @@ function ServersView:render_server_details(server, line_offset, section)
     -- Server details
     if server.uptime then
         local uptime = NuiLine():append("│ ", Text.highlights.muted):append("Uptime: ", Text.highlights.muted):append(
-            Utils.format_uptime(server.uptime), Text.highlights.info)
+            utils.format_uptime(server.uptime), Text.highlights.info)
         table.insert(lines, Text.pad_line(uptime))
     end
 

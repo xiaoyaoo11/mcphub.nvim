@@ -29,4 +29,19 @@ function M.format_relative_time(timestamp)
     end
 end
 
+--- Format duration in seconds to human readable string
+---@param seconds number Duration in seconds
+---@return string Formatted duration
+function M.format_uptime(seconds)
+    if seconds < 60 then
+        return string.format("%ds", seconds)
+    elseif seconds < 3600 then
+        return string.format("%dm %ds", math.floor(seconds / 60), seconds % 60)
+    else
+        local hours = math.floor(seconds / 3600)
+        local mins = math.floor((seconds % 3600) / 60)
+        return string.format("%dh %dm", hours, mins)
+    end
+end
+
 return M
