@@ -156,7 +156,7 @@ end
 function ToolHandler:execute()
     -- Check if already executing
     if self.state.is_executing then
-        vim.notify("Tool is already executing", vim.log.levels.WARN)
+        vim.notify("Tool is already running", vim.log.levels.WARN)
         return
     end
 
@@ -226,8 +226,8 @@ function ToolHandler:render_param_form(line_offset)
         for _, param in ipairs(params) do
             -- Parameter name and type
             local name_line = NuiLine():append(param.required and "* " or "  ", highlights.error):append(param.name,
-                highlights.success):append(" (", highlights.muted)
-                :append(self:format_param_type(param), highlights.info):append(")", highlights.muted)
+                highlights.success):append(" (", highlights.muted):append(self:format_param_type(param),
+                highlights.muted):append(")", highlights.muted)
             vim.list_extend(lines, self:render_section_content({name_line}, 2))
 
             -- Description if any

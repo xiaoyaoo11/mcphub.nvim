@@ -24,7 +24,9 @@ function UI:new()
         window = nil, -- Window handle
         buffer = nil, -- Buffer handle
         current_view = nil, -- Current view name
-        views = {} -- View instances
+        views = {}, -- View instances
+        is_shown = false, -- Whether the UI is currently visible
+        cursor_states = {} -- Store cursor positions by view name
     }
     setmetatable(instance, self)
 
@@ -95,51 +97,6 @@ function UI:init_views()
     self.current_view = "main"
 end
 
---- Set up view-specific keymaps
-function UI:setup_keymaps()
-    local function map(key, action, desc)
-        vim.keymap.set('n', key, action, {
-            buffer = self.buffer,
-            desc = desc,
-            nowait = true
-        })
-    end
-
-    -- Global navigation
-    map('H', function()
-        self:switch_view('main')
-    end, "Switch to Home view")
-
-    map('S', function()
-        self:switch_view('servers')
-    end, "Switch to Servers view")
-
-    map('C', function()
-        self:switch_view('config')
-    end, "Switch to Config view")
-
-    map('L', function()
-        self:switch_view('logs')
-    end, "Switch to Logs view")
-
-    map('?', function()
-        self:switch_view('help')
-    end, "Switch to Help view")
-
-    -- Close window
-    map('q', function()
-        self:cleanup()
-    end, "Close")
-
-    map("r", function()
-        self:refresh()
-    end, "Refresh")
-
-    map("R", function()
-        self:restart()
-    end, "Restart")
-end
-
 --- Create a new buffer for the UI
 ---@private
 function UI:create_buffer()
@@ -193,6 +150,51 @@ function UI:create_window()
     return self.window
 end
 
+--- Set up view-specific keymaps
+function UI:setup_keymaps()
+    local function map(key, action, desc)
+        vim.keymap.set("n", key, action, {
+            buffer = self.buffer,
+            desc = desc,
+            nowait = true
+        })
+    end
+
+    -- Global navigation
+    map("H", function()
+        self:switch_view("main")
+    end, "Switch to Home view")
+
+    map("S", function()
+        self:switch_view("servers")
+    end, "Switch to Servers view")
+
+    map("C", function()
+        self:switch_view("config")
+    end, "Switch to Config view")
+
+    map("L", function()
+        self:switch_view("logs")
+    end, "Switch to Logs view")
+
+    map("?", function()
+        self:switch_view("help")
+    end, "Switch to Help view")
+
+    -- Close window
+    map("q", function()
+        self:cleanup()
+    end, "Close")
+
+    map("r", function()
+        self:refresh()
+    end, "Refresh")
+
+    map("R", function()
+        self:restart()
+    end, "Restart")
+end
+
 function UI:refresh()
     if State.hub_instance then
         vim.notify("Refreshing")
@@ -224,9 +226,8 @@ end
 --- Clean up resources
 ---@private
 function UI:cleanup()
-    -- Leave current view if any
-    if self.current_view and self.views[self.current_view] then
-        self.views[self.current_view]:on_leave()
+    if not (self.window and vim.api.nvim_win_is_valid(self.window)) then
+        return
     end
 
     -- Clean up buffer if it exists
@@ -242,6 +243,7 @@ function UI:cleanup()
         vim.api.nvim_win_close(self.window, true)
         self.window = nil
     end
+    self.is_shown = false
 end
 
 --- Toggle UI visibility
@@ -257,8 +259,9 @@ end
 ---@param view_name string Name of view to switch to
 function UI:switch_view(view_name)
     -- Leave current view if any
-    if self.current_view and self.views[self.current_view] then
-        self.views[self.current_view]:on_leave()
+    if self.current_view and self.views[self.current_view] and self.is_shown then
+        self.views[self.current_view]:before_leave()
+        self.views[self.current_view]:after_leave()
     end
 
     -- Switch view
@@ -266,9 +269,9 @@ function UI:switch_view(view_name)
 
     -- Enter new view
     if self.views[view_name] then
-        self.views[view_name]:on_enter()
-        -- Draw the view
+        self.views[view_name]:before_enter()
         self.views[view_name]:draw()
+        self.views[view_name]:after_enter()
     end
 end
 
@@ -284,14 +287,12 @@ function UI:show()
 
     -- Draw current view
     self:render()
+    self.is_shown = true
 end
 
 --- Render current view
 ---@private
 function UI:render()
-    -- if self.current_view and self.views[self.current_view] then
-    --     self.views[self.current_view]:draw()
-    -- end
     self:switch_view(self.current_view)
 end
 

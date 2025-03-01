@@ -20,6 +20,13 @@ function MainView:new(ui)
     return setmetatable(self, MainView)
 end
 
+function MainView:get_initial_cursor_position()
+    -- Position after server status section
+    local lines = self:render_header()
+    vim.list_extend(lines, self:render_server_status(self:get_width()))
+    return #lines + 1
+end
+
 --- Render server status section
 ---@param width number Window width
 ---@return NuiLine[]

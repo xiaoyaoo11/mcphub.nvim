@@ -15,16 +15,17 @@ local LogsView = setmetatable({}, {
 })
 LogsView.__index = LogsView
 
----@class LogsViewState
----@field auto_scroll boolean Whether to auto scroll to bottom
-local view_state = {
-    auto_scroll = true
-}
-
 function LogsView:new(ui)
     local self = View:new(ui, "logs") -- Create base view with name
+    return setmetatable(self, LogsView)
+end
+
+function LogsView:before_enter()
+    View.before_enter(self)
+
+    -- Set up keymaps
     self.keymaps = {
-        ['x'] = {
+        ["x"] = {
             action = function()
                 State.server_output.entries = {}
                 self:draw()
@@ -32,7 +33,6 @@ function LogsView:new(ui)
             desc = "Clear logs"
         }
     }
-    return setmetatable(self, LogsView)
 end
 
 -- Render server output section

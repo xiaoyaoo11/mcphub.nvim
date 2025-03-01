@@ -18,6 +18,12 @@ function HelpView:new(ui)
     return setmetatable(instance, HelpView)
 end
 
+function HelpView:get_initial_cursor_position()
+    -- Position at start of About section
+    local lines = self:render_header()
+    return #lines + 2
+end
+
 function HelpView:render_about()
     local lines = {}
     table.insert(lines, Text.section("About MCP Hub", {}, true)[1])
@@ -81,34 +87,25 @@ function HelpView:render_view_keys()
         name = "Main View",
         keys = {{
             key = "r",
+            desc = "Refresh"
+        }, {
+            key = "R",
             desc = "Restart server"
-        }, {
-            key = "s",
-            desc = "Stop server"
-        }, {
-            key = "<CR>",
-            desc = "Retry setup (if failed)"
         }}
     }, {
         name = "Servers View",
         keys = {{
-            key = "r",
-            desc = "Refresh servers"
+            key = "<CR>",
+            desc = "Open/Execute capability"
+        }, {
+            key = "<Esc>",
+            desc = "Exit capability mode"
         }}
     }, {
         name = "Logs View",
         keys = {{
-            key = "<TAB>",
-            desc = "Switch log type"
-        }, {
-            key = "a",
-            desc = "Toggle auto-scroll"
-        }, {
-            key = "c",
+            key = "x",
             desc = "Clear logs"
-        }, {
-            key = "r",
-            desc = "Refresh view"
         }}
     }, {
         name = "Config View",

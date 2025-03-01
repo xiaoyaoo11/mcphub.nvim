@@ -31,6 +31,16 @@ function View:new(ui, name)
     return setmetatable(instance, self)
 end
 
+--- Get initial cursor position for this view
+function View:get_initial_cursor_position()
+    -- By default, position after header's divider
+    local lines = self:render_header()
+    if #lines > 0 then
+        return #lines
+    end
+    return 1
+end
+
 --- Track current cursor position
 function View:track_cursor()
     if self.ui.window and vim.api.nvim_win_is_valid(self.ui.window) then
@@ -47,23 +57,13 @@ function View:set_cursor(pos, opts)
     if not cursor then
         return
     end
-
-    opts = opts or {
-        restore_col = true
-    }
-
     -- Ensure window is valid
     if not (self.ui.window and vim.api.nvim_win_is_valid(self.ui.window)) then
         return
     end
-
-    -- Get current position if we want to restore column
-    local current_pos = vim.api.nvim_win_get_cursor(self.ui.window)
-
     -- Ensure line is within bounds
     local line_count = vim.api.nvim_buf_line_count(self.ui.buffer)
-    local new_pos = {math.min(cursor[1], line_count), opts.restore_col and current_pos[2] or cursor[2]}
-
+    local new_pos = {math.min(cursor[1], line_count), cursor[2]}
     -- Set cursor
     vim.api.nvim_win_set_cursor(self.ui.window, new_pos)
 end
@@ -102,6 +102,54 @@ function View:clear_keymaps()
         })
     end
     self.active_keymaps = {} -- Clear the active keymaps array after deletion
+end
+
+--- Save cursor position before leaving
+function View:save_cursor_position()
+    if self.ui.window and vim.api.nvim_win_is_valid(self.ui.window) then
+        self.ui.cursor_states[self.name] = vim.api.nvim_win_get_cursor(0)
+    end
+end
+
+--- Restore cursor position after entering
+function View:restore_cursor_position()
+    if not (self.ui.window and vim.api.nvim_win_is_valid(self.ui.window)) then
+        return
+    end
+
+    local saved_pos = self.ui.cursor_states[self.name]
+    if saved_pos then
+        -- Ensure position is valid
+        local line_count = vim.api.nvim_buf_line_count(self.ui.buffer)
+        local new_pos = {math.min(saved_pos[1], line_count), saved_pos[2]}
+        vim.api.nvim_win_set_cursor(0, new_pos)
+    else
+        -- Use initial position if no saved position
+        local initial_line = self:get_initial_cursor_position()
+        if initial_line then
+            vim.api.nvim_win_set_cursor(0, {initial_line, 2})
+        end
+    end
+end
+
+--- Called before view is drawn (override in child views)
+function View:before_enter()
+end
+
+--- Called after view is drawn and applied
+function View:after_enter()
+    self:apply_keymaps()
+    self:restore_cursor_position()
+end
+
+--- Called before leaving view (override in child views)
+function View:before_leave()
+    self:save_cursor_position()
+end
+
+--- Called after leaving view
+function View:after_leave()
+    self:clear_keymaps()
 end
 
 --- Whether the view should show setup errors
@@ -320,18 +368,8 @@ function View:draw()
     vim.api.nvim_buf_set_option(buf, "wrap", true)
     vim.api.nvim_buf_set_option(buf, "modifiable", false)
 
-    -- Restore cursor position
+    -- Restore cursor position after drawing
     self:set_cursor()
-end
-
---- Handle buffer enter
-function View:on_enter()
-    self:apply_keymaps()
-end
-
---- Handle buffer leave
-function View:on_leave()
-    self:clear_keymaps()
 end
 
 return View

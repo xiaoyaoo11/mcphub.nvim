@@ -17,6 +17,12 @@ ConfigView.__index = ConfigView
 
 function ConfigView:new(ui)
     local self = View:new(ui, "config") -- Create base view with name
+    return setmetatable(self, ConfigView)
+end
+
+function ConfigView:before_enter()
+    View.before_enter(self)
+
     self.keymaps = {
         ["e"] = {
             action = function()
@@ -30,7 +36,16 @@ function ConfigView:new(ui)
             desc = "Edit config"
         }
     }
-    return setmetatable(self, ConfigView)
+end
+
+function ConfigView:get_initial_cursor_position()
+    -- Position at start of server configurations
+    local lines = self:render_header()
+    if State.config and State.config.config then
+        table.insert(lines, Text.pad_line(NuiLine():append("Config File: ", Text.highlights.muted)
+            :append(State.config.config, Text.highlights.info)))
+    end
+    return #lines + 1
 end
 
 --- Render configuration for a single server
@@ -72,11 +87,8 @@ end
 
 function ConfigView:render()
     -- Get base header
-    local lines = self:render_header()
+    local lines = self:render_header(false)
     local width = self:get_width()
-
-    -- Add config file info
-    table.insert(lines, Text.section("MCP Servers Configuration ", {}, true)[1])
 
     -- Show config file path
     if State.config and State.config.config then
@@ -89,7 +101,6 @@ function ConfigView:render()
     end
 
     -- Add separator
-    table.insert(lines, Text.empty_line())
     table.insert(lines, self:divider())
     table.insert(lines, Text.empty_line())
 
@@ -111,6 +122,7 @@ function ConfigView:render()
         table.insert(lines, Text.pad_line(NuiLine():append(file_validation.error.message, Text.highlights.error)))
         table.insert(lines, Text.empty_line())
     end
+
     return lines
 end
 

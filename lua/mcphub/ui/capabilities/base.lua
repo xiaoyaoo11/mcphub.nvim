@@ -27,6 +27,16 @@ function CapabilityHandler:new(server_name, capability_info, view)
     return handler
 end
 
+--- Get preferred cursor position when entering capability mode
+---@return number|nil Line number to position cursor at
+function CapabilityHandler:get_cursor_position()
+    -- Default to first interactive line if any
+    if #self.interactive_lines > 0 then
+        return {self.interactive_lines[1].line, 2}
+    end
+    return nil
+end
+
 -- Line tracking for interactivity
 function CapabilityHandler:track_line(line_nr, type, context)
     table.insert(self.interactive_lines, {
