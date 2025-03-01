@@ -4,7 +4,98 @@ local State = require("mcphub.state")
 
 local M = {}
 
---- Process handlers for server process management
+-- Parameter type handlers for validation and conversion
+M.TypeHandlers = {
+    string = {
+        validate = function(value)
+            return true
+        end,
+        convert = function(value)
+            return value
+        end,
+        format = function()
+            return "string"
+        end
+    },
+    number = {
+        validate = function(value)
+            return tonumber(value) ~= nil
+        end,
+        convert = function(value)
+            return tonumber(value)
+        end,
+        format = function()
+            return "number"
+        end
+    },
+    integer = {
+        validate = function(value)
+            local num = tonumber(value)
+            return num and math.floor(num) == num
+        end,
+        convert = function(value)
+            return math.floor(tonumber(value))
+        end,
+        format = function()
+            return "integer"
+        end
+    },
+    boolean = {
+        validate = function(value)
+            return value == "true" or value == "false"
+        end,
+        convert = function(value)
+            return value == "true"
+        end,
+        format = function()
+            return "boolean"
+        end
+    },
+    array = {
+        validate = function(value, schema)
+            -- Parse JSON array string and validate each item
+            local ok, arr = pcall(vim.fn.json_decode, value)
+            if not ok or type(arr) ~= "table" then
+                return false
+            end
+            -- If items has enum, validate against allowed values
+            if schema.items and schema.items.enum then
+                for _, item in ipairs(arr) do
+                    if not vim.tbl_contains(schema.items.enum, item) then
+                        return false
+                    end
+                end
+            end
+            -- If items has type, validate each item's type
+            if schema.items and schema.items.type then
+                local item_validator = M.TypeHandlers[schema.items.type].validate
+                for _, item in ipairs(arr) do
+                    if not item_validator(item) then
+                        return false
+                    end
+                end
+            end
+            return true
+        end,
+        convert = function(value)
+            return vim.fn.json_decode(value)
+        end,
+        format = function(schema)
+            if schema.items then
+                if schema.items.enum then
+                    return string.format("[%s]", table.concat(vim.tbl_map(function(v)
+                        return string.format("%q", v)
+                    end, schema.items.enum), ", "))
+                elseif schema.items.type then
+                    return string.format("%s[]", M.TypeHandlers[schema.items.type].format())
+                end
+            end
+            return "array"
+        end
+    }
+}
+
+-- Process handlers for server process
 M.ProcessHandlers = {
     --- Handle server process output
     --- @param data string Raw output data

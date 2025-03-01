@@ -8,14 +8,15 @@ local Text = require("mcphub.utils.text")
 local NuiLine = require("mcphub.utils.nuiline")
 local renderer = require("mcphub.utils.renderer")
 local highlights = require("mcphub.utils.highlights")
+local Capabilities = require("mcphub.ui.capabilities")
 local Utils = require("mcphub.ui.views.servers_utils")
 
 ---@class ServersView
 ---@field super View
 ---@field cursor_highlight number|nil Extmark ID for current highlight
 ---@field hover_ns number Namespace for highlights
----@field server_sections table<string, {start_line: number, end_line: number, tools: {name: string, line: number}[]}>
----@field execution_state { active: boolean, server_name: string|nil, tool_name: string|nil, tool_info: table|nil, params: { values: table<string, string>, errors: table<string, string>, param_lines: table<number, string>, submit_line: number|nil, submit_error: string|nil, result: table|nil, is_executing: boolean }|nil }
+---@field server_sections table<string, {start_line: number, end_line: number, tools: {name: string, line: number, info: table}[], resources: {name: string, line: number, info: table}[]}>
+---@field active_capability CapabilityHandler|nil Currently active capability
 ---@field cursor_group number|nil Cursor movement tracking group
 local ServersView = setmetatable({}, {
     __index = View
@@ -30,33 +31,33 @@ function ServersView:new(ui)
     self.hover_ns = vim.api.nvim_create_namespace("MCPHubServersHover")
     self.cursor_highlight = nil
     self.server_sections = {}
-    self.execution_state = {
-        active = false,
-        server_name = nil,
-        tool_name = nil,
-        tool_info = nil,
-        params = nil
-    }
+    self.active_capability = nil
 
     return self
 end
 
---- Get server and tool info for a given line number
+--- Get capability info for a given line number
 ---@param line_nr number
----@return string|nil server_name, string|nil tool_name
+---@return string|nil server_name, string|nil capability_type, table|nil capability_info
 function ServersView:get_line_info(line_nr)
     for server_name, section in pairs(self.server_sections) do
         if line_nr >= section.start_line and line_nr <= section.end_line then
-            -- Check if line is a tool line
+            -- Check tools
             for _, tool in ipairs(section.tools) do
                 if tool.line == line_nr then
-                    return server_name, tool.name
+                    return server_name, "tool", tool.info
                 end
             end
-            return server_name, nil
+            -- Check resources
+            for _, resource in ipairs(section.resources) do
+                if resource.line == line_nr then
+                    return server_name, "resource", resource.info
+                end
+            end
+            return server_name, nil, nil
         end
     end
-    return nil, nil
+    return nil, nil, nil
 end
 
 --- Handle cursor movement
@@ -72,204 +73,68 @@ function ServersView:handle_cursor_move()
     local cursor = vim.api.nvim_win_get_cursor(0)
     local line = cursor[1]
 
-    if self.execution_state.active then
-        -- In execution mode, highlight input lines and submit
-        if self.execution_state.params.param_lines[line] then
-            self.cursor_highlight = vim.api.nvim_buf_set_extmark(self.ui.buffer, self.hover_ns, line - 1, 0, {
-                line_hl_group = highlights.groups.active_item,
-                virt_text = {{"Press <CR> to edit", highlights.groups.muted}},
-                virt_text_pos = "eol"
-            })
-        elseif line == self.execution_state.params.submit_line and not self.execution_state.params.is_executing then
-            self.cursor_highlight = vim.api.nvim_buf_set_extmark(self.ui.buffer, self.hover_ns, line - 1, 0, {
-                line_hl_group = highlights.groups.active_item,
-                virt_text = {{"Press <CR> to submit", highlights.groups.muted}},
-                virt_text_pos = "eol"
-            })
-        end
+    if self.active_capability and self.active_capability.handle_cursor_move then
+        self.active_capability:handle_cursor_move(self, line)
         return
     end
 
-    -- Not in execution mode - highlight tools
-    local server_name, tool_name = self:get_line_info(line)
-    if tool_name then
+    -- Highlight available capabilities
+    local _, cap_type = self:get_line_info(line)
+    if cap_type then
         self.cursor_highlight = vim.api.nvim_buf_set_extmark(self.ui.buffer, self.hover_ns, line - 1, 0, {
             line_hl_group = highlights.groups.active_item,
-            virt_text = {{"Press <CR> to execute", highlights.groups.muted}},
+            virt_text = {{"Press <CR> to open", highlights.groups.muted}},
             virt_text_pos = "eol"
         })
     end
 end
 
-function ServersView:get_tool_info(server_name, tool_name)
-    local server = nil
-    for _, s in ipairs(State.server_state.servers or {}) do
-        if s.name == server_name then
-            server = s
-            break
-        end
-    end
-
-    if server and server.capabilities then
-        for _, tool in ipairs(server.capabilities.tools) do
-            if tool.name == tool_name then
-                return tool
-            end
-        end
-    end
-    return nil
-end
-
-function ServersView:enter_execution_mode(server_name, tool_name)
-    self.execution_state = {
-        active = true,
-        server_name = server_name,
-        tool_name = tool_name,
-        tool_info = self:get_tool_info(server_name, tool_name),
-        params = {
-            values = {},
-            errors = {},
-            param_lines = {},
-            submit_line = nil,
-            submit_error = nil,
-            result = nil,
-            is_executing = false
-        }
-    }
-    self:setup_active_mode()
-end
-
-function ServersView:exit_execution_mode()
-    self.execution_state = {
-        active = false,
-        server_name = nil,
-        tool_name = nil,
-        tool_info = nil,
-        params = nil
-    }
-    self:setup_active_mode()
-end
-
-function ServersView:handle_param_action()
+function ServersView:handle_capability_action()
     -- Get current line
     local cursor = vim.api.nvim_win_get_cursor(0)
     local line = cursor[1]
 
-    if line == self.execution_state.params.submit_line then
-        -- Check if already executing
-        if self.execution_state.params.is_executing then
-            vim.notify("Tool is already executing", vim.log.levels.WARN)
-            return
-        end
-
-        -- On submit button
-        local ok, err, errors = Utils.validate_all_params(self.execution_state.tool_info,
-            self.execution_state.params.values)
-        if not ok then
-            self.execution_state.params.submit_error = err
-            self.execution_state.params.errors = errors
-            self:draw()
-            return
-        end
-
-        -- Convert all values to their proper types
-        local converted_values = {}
-
-        for name, value in pairs(self.execution_state.params.values) do
-            local schema = self.execution_state.tool_info.inputSchema.properties[name]
-            if schema then
-                converted_values[name] = Utils.convert_param(value, schema)
-            end
-        end
-
-        -- Set executing state
-        self.execution_state.params.is_executing = true
-        self:draw() -- Redraw to show loading state
-
-        -- Execute tool with converted values
-        if State.hub_instance then
-            State.hub_instance:call_tool(self.execution_state.server_name, self.execution_state.tool_name,
-                converted_values, {
-                    return_text = true,
-                    callback = function(response, err)
-                        self.execution_state.params.is_executing = false -- Reset executing state
-                        if err then
-                            vim.notify("Tool execution failed: " .. err, vim.log.levels.ERROR)
-                            self.execution_state.params.submit_error = err
-                        else
-                            vim.notify("Tool executed successfully", vim.log.levels.INFO)
-                            self.execution_state.params.result = response
-                            self.execution_state.params.submit_error = nil
-                        end
-                        self:draw()
-                    end
-                })
+    if self.active_capability then
+        -- Let active capability handle the action
+        if self.active_capability.handle_action then
+            self.active_capability:handle_action(line)
         end
         return
     end
 
-    -- Check if line is a parameter input
-    local param_name = self.execution_state.params.param_lines[line]
-    if not param_name then
-        return
+    -- Check if we're activating a new capability
+    local server_name, cap_type, cap_info = self:get_line_info(line)
+    if cap_type then
+        -- Create new capability handler
+        self.active_capability = Capabilities.create_handler(cap_type, server_name, cap_info, self)
+        self:draw()
     end
-
-    -- Get parameter schema
-    local param_schema
-    if self.execution_state.tool_info and self.execution_state.tool_info.inputSchema and
-        self.execution_state.tool_info.inputSchema.properties then
-        param_schema = self.execution_state.tool_info.inputSchema.properties[param_name]
-    end
-
-    if not param_schema then
-        vim.notify("Invalid parameter schema", vim.log.levels.ERROR)
-        return
-    end
-
-    -- Show input prompt for parameter with type information
-    vim.ui.input({
-        prompt = string.format("%s (%s): ", param_name, Utils.format_param_type(param_schema)),
-        default = self.execution_state.params.values[param_name] or ""
-    }, function(input)
-        if input then
-            -- Validate input
-            local ok, err = Utils.validate_param(input, param_schema)
-            if not ok then
-                self.execution_state.params.errors[param_name] = err
-            else
-                -- Update value
-                self.execution_state.params.values[param_name] = input
-                -- Clear any previous error
-                self.execution_state.params.errors[param_name] = nil
-            end
-            self:draw()
-        end
-    end)
 end
 
 function ServersView:render_breadcrumb()
-    if not self.execution_state.active then
+    if not self.active_capability then
         return {}
     end
 
-    local breadcrumb = NuiLine():append(self.execution_state.server_name, Text.highlights.muted):append(" > ",
-        Text.highlights.muted):append(" " .. self.execution_state.tool_name .. " ", Text.highlights.title)
+    local breadcrumb = NuiLine():append(self.active_capability.server_name, Text.highlights.muted):append(" > ",
+        Text.highlights.muted):append(" " .. self.active_capability.info.name .. " ", Text.highlights.title)
 
     return {Text.pad_line(breadcrumb)}
 end
 
 function ServersView:setup_active_mode()
-    if self.execution_state.active then
+    if self.active_capability then
         self.keymaps = {
             ["<CR>"] = {
                 action = function()
-                    self:handle_param_action()
+                    self:handle_capability_action()
                 end,
-                desc = "Edit/Submit"
+                desc = "Execute/Submit"
             },
             ["<Esc>"] = {
                 action = function()
-                    self:exit_execution_mode()
+                    self.active_capability = nil
+                    self:setup_active_mode()
                     self:draw()
                 end,
                 desc = "Back"
@@ -282,14 +147,14 @@ function ServersView:setup_active_mode()
                     local cursor = vim.api.nvim_win_get_cursor(0)
                     local line = cursor[1]
 
-                    -- Get tool info from our mapping
-                    local server_name, tool_name = self:get_line_info(line)
-                    if server_name and tool_name then
-                        self:enter_execution_mode(server_name, tool_name)
-                        self:draw() -- Redraw in execution mode
+                    local server_name, cap_type, cap_info = self:get_line_info(line)
+                    if cap_type then
+                        self.active_capability = Capabilities.create_handler(cap_type, server_name, cap_info, self)
+                        self:setup_active_mode()
+                        self:draw()
                     end
                 end,
-                desc = "Execute tool/resource"
+                desc = "Open capability"
             }
         }
     end
@@ -337,32 +202,15 @@ function ServersView:render()
     end
 
     -- Get base header (with/without extra line based on mode)
-    local lines = self:render_header(not self.execution_state.active)
+    local lines = self:render_header(not self.active_capability)
 
-    if self.execution_state.active then
-        -- Execution mode view
+    if self.active_capability then
+        -- Active capability view
         vim.list_extend(lines, self:render_breadcrumb())
         vim.list_extend(lines, {self:divider()})
 
-        -- Tool info section
-        if self.execution_state.tool_info then
-            -- Description
-            local desc = self.execution_state.tool_info.description or "No description available"
-            vim.list_extend(lines, vim.tbl_map(Text.pad_line, Text.multiline(desc, Text.highlights.muted)))
-            table.insert(lines, Text.empty_line())
-
-            -- Parameters form with line tracking
-            local form_lines, param_lines, submit_line = Utils.render_params_form(self.execution_state.tool_info,
-                self.execution_state.params, self)
-            vim.list_extend(lines, form_lines)
-
-            -- Update line tracking in execution state
-            self.execution_state.params.param_lines = {}
-            for line_nr, param_name in pairs(param_lines) do
-                self.execution_state.params.param_lines[#lines - #form_lines + line_nr] = param_name
-            end
-            self.execution_state.params.submit_line = #lines - #form_lines + submit_line
-        end
+        -- Let capability render its content
+        vim.list_extend(lines, self.active_capability:render(#lines))
         return lines
     end
 
@@ -379,26 +227,14 @@ function ServersView:render()
                 -- Track server section
                 local section = {
                     start_line = current_line + 1,
-                    tools = {}
+                    tools = {},
+                    resources = {}
                 }
 
                 -- Store tool line numbers during render
                 local new_lines
-                new_lines, current_line = Utils.render_server(server, current_line)
+                new_lines, current_line = self:render_server_details(server, current_line, section)
                 vim.list_extend(lines, new_lines)
-
-                -- Store tool line numbers
-                if server.capabilities and server.capabilities.tools then
-                    for _, tool in ipairs(server.capabilities.tools) do
-                        if tool._line_nr then
-                            table.insert(section.tools, {
-                                name = tool.name,
-                                line = tool._line_nr
-                            })
-                            tool._line_nr = nil -- Clean up temp property
-                        end
-                    end
-                end
 
                 section.end_line = current_line
                 self.server_sections[server.name] = section
@@ -425,6 +261,98 @@ function ServersView:render()
     end
 
     return lines
+end
+
+--- Render server details with tools and resources
+---@param server table Server data
+---@param line_offset number Current line number offset
+---@param section table Section info to update with capabilities
+---@return NuiLine[] lines, number new_offset
+function ServersView:render_server_details(server, line_offset, section)
+    local lines = {}
+
+    -- Server header
+    local title = NuiLine():append("╭─ ", Text.highlights.muted):append(" " .. server.name .. " ",
+        Text.highlights.header_btn)
+    table.insert(lines, Text.pad_line(title))
+
+    -- Server details
+    if server.uptime then
+        local uptime = NuiLine():append("│ ", Text.highlights.muted):append("Uptime: ", Text.highlights.muted):append(
+            Utils.format_uptime(server.uptime), Text.highlights.info)
+        table.insert(lines, Text.pad_line(uptime))
+    end
+
+    -- Capabilities
+    if server.capabilities then
+        -- Tools
+        if #server.capabilities.tools > 0 then
+            table.insert(lines, Text.pad_line(NuiLine():append("│", Text.highlights.muted)))
+            table.insert(lines, Text.pad_line(
+                NuiLine():append("│ ", Text.highlights.muted):append(" Tools: ", Text.highlights.header)))
+
+            for _, tool in ipairs(server.capabilities.tools) do
+                -- Tool name
+                local tool_line = NuiLine():append("│  • ", Text.highlights.muted):append(tool.name,
+                    Text.highlights.success)
+                table.insert(lines, Text.pad_line(tool_line))
+
+                -- Track tool line number for interaction
+                local line_nr = line_offset + #lines
+                table.insert(section.tools, {
+                    name = tool.name,
+                    line = line_nr,
+                    info = tool
+                })
+
+                -- Tool description
+                if tool.description then
+                    for _, desc_line in ipairs(Text.multiline(tool.description, highlights.groups.muted)) do
+                        local desc = NuiLine():append("│    ", Text.highlights.muted):append(desc_line,
+                            Text.highlights.muted)
+                        table.insert(lines, Text.pad_line(desc))
+                    end
+                end
+            end
+        end
+
+        -- Resources
+        if #server.capabilities.resources > 0 then
+            table.insert(lines, Text.pad_line(NuiLine():append("│", Text.highlights.muted)))
+            table.insert(lines, Text.pad_line(
+                NuiLine():append("│ ", Text.highlights.muted):append(" Resources: ", Text.highlights.header)))
+
+            for _, resource in ipairs(server.capabilities.resources) do
+                local res_line = NuiLine():append("│  • ", Text.highlights.muted):append(resource.name,
+                    Text.highlights.success):append(" (", Text.highlights.muted):append(resource.mimeType,
+                    Text.highlights.info):append(")", Text.highlights.muted)
+                table.insert(lines, Text.pad_line(res_line))
+
+                -- Track resource line number for interaction
+                local line_nr = line_offset + #lines
+                table.insert(section.resources, {
+                    name = resource.name,
+                    line = line_nr,
+                    info = resource
+                })
+
+                -- Resource description if any
+                if resource.description then
+                    for _, desc_line in ipairs(Text.multiline(resource.description, highlights.groups.muted)) do
+                        local desc = NuiLine():append("│    ", Text.highlights.muted):append(desc_line,
+                            Text.highlights.muted)
+                        table.insert(lines, Text.pad_line(desc))
+                    end
+                end
+            end
+        end
+    end
+
+    -- Server footer
+    table.insert(lines, Text.pad_line(NuiLine():append("╰─", Text.highlights.muted)))
+    table.insert(lines, Text.empty_line())
+
+    return lines, line_offset + #lines
 end
 
 return ServersView

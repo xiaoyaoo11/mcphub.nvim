@@ -1,0 +1,264 @@
+local State = require("mcphub.state")
+local Base = require("mcphub.ui.capabilities.base")
+local Text = require("mcphub.utils.text")
+local NuiLine = require("mcphub.utils.nuiline")
+local highlights = require("mcphub.utils.highlights").groups
+local Handlers = require("mcphub.utils.handlers")
+
+---@class ToolHandler : CapabilityHandler
+---@field super CapabilityHandler
+local ToolHandler = setmetatable({}, {
+    __index = Base
+})
+ToolHandler.__index = ToolHandler
+ToolHandler.type = "tool"
+
+function ToolHandler:new(server_name, capability_info, view)
+    local handler = Base.new(self, server_name, capability_info, view)
+    handler.state = vim.tbl_extend("force", handler.state, {
+        params = {
+            values = {},
+            errors = {}
+        }
+    })
+    return handler
+end
+
+-- Parameter handling
+function ToolHandler:validate_param(name, value)
+    local param_schema = self.info.inputSchema.properties[name]
+    if not param_schema or not param_schema.type then
+        return false, "Invalid parameter schema"
+    end
+
+    -- Get type handler
+    local handler = Handlers.TypeHandlers[param_schema.type]
+    if not handler then
+        return false, "Unknown parameter type: " .. param_schema.type
+    end
+
+    -- Validate value
+    local is_valid = handler.validate(value, param_schema)
+    if not is_valid then
+        return false, string.format("Invalid %s value: %s", param_schema.type, value)
+    end
+
+    return true, nil
+end
+
+function ToolHandler:convert_param(name, value)
+    local param_schema = self.info.inputSchema.properties[name]
+    local handler = Handlers.TypeHandlers[param_schema.type]
+    return handler.convert(value)
+end
+
+function ToolHandler:format_param_type(param)
+    local handler = Handlers.TypeHandlers[param.type]
+    if not handler then
+        return param.type
+    end
+    return handler.format(param)
+end
+
+function ToolHandler:validate_all_params()
+    local errors = {}
+    for name, prop in pairs(self.info.inputSchema.properties) do
+        if vim.tbl_contains(self.info.inputSchema.required or {}, name) then
+            if not self.state.params.values[name] or self.state.params.values[name] == "" then
+                errors[name] = "Required parameter"
+            else
+                -- Also validate the value if present
+                local ok, err = self:validate_param(name, self.state.params.values[name])
+                if not ok then
+                    errors[name] = err
+                end
+            end
+        end
+    end
+
+    if next(errors) then
+        return false, "Some required parameters are missing or invalid", errors
+    end
+
+    return true, nil, {}
+end
+
+-- Action handling
+function ToolHandler:handle_input_action(param_name)
+    local param_schema = self.info.inputSchema.properties[param_name]
+    if not param_schema then
+        return
+    end
+
+    self:handle_input(string.format("%s (%s): ", param_name, self:format_param_type(param_schema)),
+        self.state.params.values[param_name], function(input)
+            -- Validate input
+            local ok, err = self:validate_param(param_name, input)
+            if not ok then
+                self.state.params.errors[param_name] = err
+            else
+                -- Update value
+                self.state.params.values[param_name] = input
+                -- Clear any previous error
+                self.state.params.errors[param_name] = nil
+            end
+            self.view:draw()
+        end)
+end
+
+function ToolHandler:handle_action(line)
+    local type, context = self:get_line_info(line)
+    if not type then
+        return
+    end
+
+    if type == "input" then
+        self:handle_input_action(context)
+    elseif type == "submit" then
+        self:execute()
+    end
+end
+
+-- Execution
+function ToolHandler:execute()
+    -- Check if already executing
+    if self.state.is_executing then
+        vim.notify("Tool is already executing", vim.log.levels.WARN)
+        return
+    end
+
+    -- Validate all parameters first
+    local ok, err, errors = self:validate_all_params()
+    if not ok then
+        self.state.params.errors = errors
+        self.state.error = err
+        self.view:draw()
+        return
+    end
+
+    -- Set executing state
+    self.state.is_executing = true
+    self.state.error = nil
+    self.view:draw()
+
+    -- Convert all parameters to their proper types
+    local converted_values = {}
+    for name, value in pairs(self.state.params.values) do
+        converted_values[name] = self:convert_param(name, value)
+    end
+
+    -- Execute tool
+    if State.hub_instance then
+        State.hub_instance:call_tool(self.server_name, self.info.name, converted_values, {
+            return_text = true,
+            callback = function(response, err)
+                self:handle_response(response, err)
+                self.view:draw()
+            end
+        })
+    end
+end
+
+-- Rendering
+function ToolHandler:render_param_form(line_offset)
+    -- Clear previous line tracking
+    self:clear_line_tracking()
+
+    local lines = {}
+
+    -- Parameters section
+    vim.list_extend(lines, self:render_section_start("Input Parameters"))
+
+    if not self.info.inputSchema or not self.info.inputSchema.properties then
+        -- No parameters case
+        local content = NuiLine():append("No parameters required ", highlights.muted)
+        if self.state.is_executing then
+            content:append("[ ", highlights.muted):append("Processing...", highlights.muted):append(" ]",
+                highlights.muted)
+        else
+            content:append("[ ", highlights.success_fill):append("Submit", highlights.success_fill):append(" ]",
+                highlights.success_fill)
+        end
+        vim.list_extend(lines, self:render_section_content({content}, 2))
+        -- Track submit line
+        self:track_line(line_offset + #lines, "submit")
+    else
+        -- Render each parameter
+        for name, prop in pairs(self.info.inputSchema.properties) do
+            -- Parameter name and type
+            local name_line = NuiLine():append(vim.tbl_contains(self.info.inputSchema.required or {}, name) and "* " or
+                                                   "  ", highlights.error):append(name, highlights.success):append(" (",
+                highlights.muted):append(self:format_param_type(prop), highlights.info):append(")", highlights.muted)
+            vim.list_extend(lines, self:render_section_content({name_line}, 2))
+
+            -- Description if any
+            if prop.description then
+                for _, desc_line in ipairs(Text.multiline(prop.description, highlights.muted)) do
+                    vim.list_extend(lines, self:render_section_content({desc_line}, 4))
+                end
+            end
+
+            -- Input field
+            local value = self.state.params.values[name]
+            local input_line = NuiLine():append("> ", highlights.success):append(value or "", highlights.info)
+            vim.list_extend(lines, self:render_section_content({input_line}, 2))
+
+            -- Track input line
+            self:track_line(line_offset + #lines, "input", name)
+
+            -- Error if any
+            if self.state.params.errors[name] then
+                local error_line = NuiLine():append("⚠ ", highlights.error):append(self.state.params.errors[name],
+                    highlights.error)
+                vim.list_extend(lines, self:render_section_content({error_line}, 2))
+            end
+
+            table.insert(lines, Text.pad_line(NuiLine():append("│", highlights.muted)))
+        end
+
+        -- Submit button
+        local submit_content
+        if self.state.is_executing then
+            submit_content = NuiLine():append("[ ", highlights.muted):append("Processing...", highlights.muted):append(
+                " ]", highlights.muted)
+        else
+            submit_content = NuiLine():append("[ ", highlights.success_fill):append("Submit", highlights.success_fill)
+                :append(" ]", highlights.success_fill)
+        end
+        vim.list_extend(lines, self:render_section_content({submit_content}, 2))
+
+        -- Track submit line
+        self:track_line(line_offset + #lines, "submit")
+    end
+
+    vim.list_extend(lines, self:render_section_end())
+    return lines
+end
+
+function ToolHandler:render(line_offset)
+    line_offset = line_offset or 0
+    local lines = {}
+
+    -- Show description if any
+    if self.info.description then
+        vim.list_extend(lines, vim.tbl_map(Text.pad_line, Text.multiline(self.info.description, highlights.muted)))
+        table.insert(lines, Text.pad_line(NuiLine()))
+    end
+
+    -- Parameter form
+    vim.list_extend(lines, self:render_param_form(line_offset + #lines))
+
+    -- Error message
+    if self.state.error then
+        table.insert(lines, Text.pad_line(NuiLine()))
+        local error_line = NuiLine():append("⚠ ", highlights.error):append(self.state.error, highlights.error)
+        table.insert(lines, Text.pad_line(error_line))
+    end
+
+    -- Result if any
+    vim.list_extend(lines, self:render_result())
+
+    return lines
+end
+
+return ToolHandler
