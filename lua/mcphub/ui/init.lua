@@ -40,7 +40,7 @@ function UI:new()
             -- Check if we need to update
             local should_update = false
             for k, _ in pairs(changes) do
-                if k == "setup_state" or k == "server_state" or k == "logs" or k == "errors" then
+                if k == "server_output" or k == "setup_state" or k == "server_state" or k == "logs" or k == "errors" then
                     should_update = true
                     break
                 end

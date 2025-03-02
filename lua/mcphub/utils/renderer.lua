@@ -11,10 +11,12 @@ end
 
 function M.render_hub_errors(errors)
     local lines = {}
-    if #errors > 0 then
-        -- Section header
-        table.insert(lines, Text.section("Recent Issues", {}, true)[1])
 
+    -- Section header always shown
+    table.insert(lines, Text.section("Recent Issues", {}, true)[1])
+    -- table.insert(lines, Text.empty_line())
+
+    if #errors > 0 then
         for i = 1, #errors, 1 do
             local err = errors[i]
             local error_lines = Text.multiline(err.message, Text.highlights.error)
@@ -30,9 +32,12 @@ function M.render_hub_errors(errors)
                 vim.list_extend(lines, errlines)
             end
         end
-
-        table.insert(lines, Text.empty_line())
+    else
+        -- Show placeholder when no errors
+        table.insert(lines, Text.pad_line(NuiLine():append("No issues found", Text.highlights.muted), nil, 4))
     end
+
+    table.insert(lines, Text.empty_line())
     return lines
 end
 

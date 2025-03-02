@@ -32,8 +32,8 @@ end
 ---@param line NuiLine|string The line to pad
 ---@param highlight? string Optional highlight for string input
 ---@return NuiLine
-function M.pad_line(line, highlight)
-    local nui_line = NuiLine():append(string.rep(" ", M.HORIZONTAL_PADDING))
+function M.pad_line(line, highlight, padding)
+    local nui_line = NuiLine():append(string.rep(" ", padding or M.HORIZONTAL_PADDING))
 
     if type(line) == "string" then
         nui_line:append(line, highlight)
@@ -41,7 +41,7 @@ function M.pad_line(line, highlight)
         nui_line:append(line)
     end
 
-    return nui_line:append(string.rep(" ", M.HORIZONTAL_PADDING))
+    return nui_line:append(string.rep(" ", padding or M.HORIZONTAL_PADDING))
 end
 
 --- Create empty line with consistent padding
@@ -58,10 +58,10 @@ end
 ---@return NuiLine[]
 function M.section(title, content, expanded, highlight)
     local lines = {}
-    local icon = expanded and "▾" or "▸"
+    local icon = "" -- expanded and "▾" or "▸"
 
     -- Add title with icon
-    table.insert(lines, M.pad_line(NuiLine():append(icon .. " " .. title, highlight or M.highlights.header)))
+    table.insert(lines, M.pad_line(NuiLine():append(icon .. " " .. title .. " ", highlight or M.highlights.header)))
 
     -- Add content if expanded
     if expanded then

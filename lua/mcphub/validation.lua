@@ -65,6 +65,7 @@ function M.validate_config_file(path)
     if not success then
         return {
             ok = false,
+            content = content,
             error = Error("SETUP", Error.Types.SETUP.INVALID_CONFIG,
                 string.format("Invalid JSON in config file: %s", path), {
                     parse_error = json
@@ -75,6 +76,7 @@ function M.validate_config_file(path)
     if not json.mcpServers or type(json.mcpServers) ~= "table" then
         return {
             ok = false,
+            content = content,
             error = Error("SETUP", Error.Types.SETUP.INVALID_CONFIG,
                 string.format("Config file must contain 'mcpServers' object: %s", path))
         }

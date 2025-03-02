@@ -79,13 +79,25 @@ function MainView:render_servers()
 
     -- Section header
     table.insert(lines, Text.section("MCP Servers", {}, true)[1])
+    -- table.insert(lines, Text.empty_line())
 
     -- Show each server
     for _, server in ipairs(State.server_state.servers) do
-        -- Server name and status
-        local server_line = NuiLine():append("• ", Text.highlights.muted):append(server.name .. " ",
-            Text.highlights.success):append("(" .. server.status .. ")", Text.highlights.muted)
-        table.insert(lines, Text.pad_line(server_line))
+        -- Server name with status icon
+        local status_icon = ({
+            connected = "● ",
+            connecting = "◉ ",
+            disconnected = "○ "
+        })[server.status] or "⚠ "
+
+        local status_hl = ({
+            connected = Text.highlights.success,
+            connecting = Text.highlights.info,
+            disconnected = Text.highlights.warning
+        })[server.status] or Text.highlights.error
+
+        local server_line = NuiLine():append(status_icon, status_hl):append(server.name, Text.highlights.success)
+        table.insert(lines, Text.pad_line(server_line, nil, 4))
 
         -- Server capabilities
         if server.capabilities then
@@ -93,7 +105,7 @@ function MainView:render_servers()
                 Text.highlights.muted):append(tostring(#server.capabilities.tools), Text.highlights.info):append(", ",
                 Text.highlights.muted):append("Resources: ", Text.highlights.muted):append(
                 tostring(#server.capabilities.resources), Text.highlights.info)
-            table.insert(lines, Text.pad_line(cap_line))
+            table.insert(lines, Text.pad_line(cap_line, nil, 4))
         end
     end
 
@@ -111,6 +123,9 @@ function MainView:render()
     local lines = self:render_header()
     -- Server status section
     vim.list_extend(lines, self:render_server_status())
+    if State.server_state.status == "connecting" then
+        return lines
+    end
     -- Servers section
     vim.list_extend(lines, self:render_servers())
     -- Recent errors section
