@@ -127,19 +127,34 @@ function HelpView:render_troubleshooting()
     local help_text = [[
 Common Issues:
 
-1. Server Connection
-   • Check port availability in Config view
-   • Another server might be running
-   • Check Logs view for errors
+1. Environment Setup
+   • Verify Node.js (>=18.0.0) is installed
+   • Ensure Python is available
+   • Check uvx installation
+   • Most servers use npx/uvx commands - verify they work
 
-2. Tool/Resource Errors
+2. Server Configuration
+   • Ensure config file path is absolute
+   • Verify JSON format with mcpServers key
+   • Validate server command and args
+   • Check port availability in Config view
+
+3. Server Connection
+   • Use MCP Inspector to verify operation
+   • Try mcp-cli to test configuration
+   • Check Logs view for errors
+   • Test tools individually to isolate issues
+
+4. Tool/Resource Errors
    • Verify server is connected
    • Check parameter values
+   • Validate args match tool schema
    • See Logs view for details
 
 Need More Help?
-• View logs for detailed errors
-• Check MCP Inspector tool
+• MCP Inspector: github.com/modelcontextprotocol/inspector
+• mcp-cli: github.com/wong2/mcp-cli
+• Check Logs for detailed errors
 • Visit: github.com/ravitemer/mcphub.nvim
 ]]
 

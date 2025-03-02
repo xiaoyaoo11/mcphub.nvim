@@ -48,7 +48,7 @@ Using [lazy.nvim](https://github.com/folke/lazy.nvim):
             on_error = function(err)
                 -- Called on errors
             end,
-            shutdown_delay = 10000, -- Wait 10s before shutting down server after last client exits
+            shutdown_delay = 0, -- Wait 0ms before shutting down server after last client exits
             log = {
                 level = vim.log.levels.WARN,
                 to_file = false,
@@ -162,7 +162,17 @@ Note: You can also access the Express server directly at http://localhost:[port]
 
 ## 🔧 Troubleshooting
 
-1. **Port Issues**
+1. **Environment Requirements**
+
+   - Ensure these are installed as they're required by most MCP servers:
+     ```bash
+     node --version    # Should be >= 18.0.0
+     python --version  # Should be installed
+     uvx --version    # Should be installed
+     ```
+   - Most server commands use `npx` or `uvx` - verify these work in your terminal
+
+2. **Port Issues**
 
    - If you get `EADDRINUSE` error, kill the existing process:
      ```bash
@@ -170,18 +180,22 @@ Note: You can also access the Express server directly at http://localhost:[port]
      kill [pid]       # Kill the process
      ```
 
-2. **Configuration File**
+3. **Configuration File**
 
    - Ensure config path is absolute
    - Verify file contains valid JSON with `mcpServers` key
    - Check server-specific configuration requirements
+   - Validate server command and args are correct for your system
 
-3. **MCP Server Issues**
+4. **MCP Server Issues**
 
-   - Use [MCP Inspector](https://github.com/modelcontextprotocol/inspector) to verify server operation
+   - Validate server configurations using either:
+     - [MCP Inspector](https://github.com/modelcontextprotocol/inspector): GUI tool for verifying server operation
+     - [mcp-cli](https://github.com/wong2/mcp-cli): Command-line tool for testing servers with config files
    - Check server logs in MCPHub UI (Logs view)
+   - Test tools and resources individually to isolate issues
 
-4. **Need Help?**
+5. **Need Help?**
    - Create a [Discussion](https://github.com/ravitemer/mcphub.nvim/discussions) for questions
    - Open an [Issue](https://github.com/ravitemer/mcphub.nvim/issues) for bugs
 

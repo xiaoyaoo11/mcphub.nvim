@@ -63,7 +63,7 @@ Using lazy.nvim: >lua
                 on_error = function(err)
                     -- Called on errors
                 end,
-                shutdown_delay = 10000, -- Wait 10s before shutting down
+                shutdown_delay = 0, -- Wait 0ms before shutting down server after last client exits
                 log = {
                     level = vim.log.levels.WARN,
                     to_file = false,
@@ -153,21 +153,39 @@ See extensions/ folder for more examples and implementation details.
 ==============================================================================
 TROUBLESHOOTING                                           *mcphub-troubleshooting*
 
-1. Port Issues~
+1. Environment Requirements~
+   Most MCP servers require these to be installed:
+>sh
+   node --version    # Should be >= 18.0.0
+   python --version  # Should be installed
+   uvx --version    # Should be installed
+
+   # Most server commands use these - verify they work:
+   npx --version
+   uvx --version
+<
+
+2. Port Issues~
    If you get `EADDRINUSE` error:
 >sh
    lsof -i :[port]  # Find process ID
    kill [pid]       # Kill the process
 <
 
-2. Configuration File~
+3. Configuration File~
    - Ensure config path is absolute
    - Verify file contains valid JSON with `mcpServers` key
    - Check server-specific configuration requirements
+   - Validate server command and args are correct for your system
 
-3. MCP Server Issues~
-   - Use MCP Inspector to verify server operation
+4. MCP Server Issues~
+   Ways to validate server configurations:
+   - MCP Inspector: GUI tool for verifying server operation
+     https://github.com/modelcontextprotocol/inspector
+   - mcp-cli: Command-line tool for testing with config files
+     https://github.com/wong2/mcp-cli
    - Check server logs in MCPHub UI (Logs view)
+   - Test tools and resources individually to isolate issues
 
 Need Help?~
 - Create a Discussion: https://github.com/ravitemer/mcphub.nvim/discussions
