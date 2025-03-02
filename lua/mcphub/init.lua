@@ -8,24 +8,6 @@ local Error = require("mcphub.errors")
 
 local M = {}
 
---- @brief [[
---- Main module for MCPHub plugin
---- Provides setup and instance management functions
----
---- Usage:
---- ```lua
---- require('mcphub').setup({
----   port = 54321,
----   config = "~/.config/mcp/servers.json",
----   log = {
----     level = vim.log.levels.INFO,
----     to_file = true,
----     file_path = "~/.local/state/nvim/mcphub.log"
----   }
---- })
---- ```
---- @brief ]]
-
 --- Setup MCPHub plugin with error handling and validation
 --- @param opts? { port?: number, config?: string, log?: table, on_ready?: fun(hub: MCPHub), on_error?: fun(err: string) }
 --[[
@@ -55,7 +37,7 @@ function M.setup(opts)
     local config = vim.tbl_deep_extend("force", {
         port = nil,
         config = nil,
-        shutdown_delay = 10000, -- wait 10s before shutting down server after exiting neovim
+        shutdown_delay = 0, -- wait 10s before shutting down server after exiting neovim
         log = {
             level = vim.log.levels.ERROR,
             to_file = false,
