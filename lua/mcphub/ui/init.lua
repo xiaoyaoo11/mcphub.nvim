@@ -190,9 +190,9 @@ function UI:setup_keymaps()
         self:refresh()
     end, "Refresh")
 
-    map("R", function()
-        self:restart()
-    end, "Restart")
+    -- map("R", function()
+    --     self:restart()
+    -- end, "Restart")
 end
 
 function UI:refresh()
@@ -208,20 +208,20 @@ function UI:refresh()
     end
 end
 
-function UI:restart()
-    if State.hub_instance then
-        vim.notify("Restarting")
-        State.hub_instance:restart(function(success)
-            if success then
-                vim.notify("Restarted")
-            else
-                vim.notify("Failed to restart")
-            end
-        end)
-    else
-        vim.notify("No hub instance available")
-    end
-end
+-- function UI:restart()
+--     if State.hub_instance then
+--         vim.notify("Restarting")
+--         State.hub_instance:restart(function(success)
+--             if success then
+--                 vim.notify("Restarted")
+--             else
+--                 vim.notify("Failed to restart")
+--             end
+--         end)
+--     else
+--         vim.notify("No hub instance available")
+--     end
+-- end
 
 --- Clean up resources
 ---@private

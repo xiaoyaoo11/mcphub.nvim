@@ -19,25 +19,32 @@ function HelpView:new(ui)
 end
 
 function HelpView:get_initial_cursor_position()
-    -- Position at start of About section
+    -- Position at start of Quick Start section
     local lines = self:render_header()
     return #lines + 2
 end
 
-function HelpView:render_about()
+function HelpView:render_quick_start()
     local lines = {}
-    table.insert(lines, Text.section("About MCP Hub", {}, true)[1])
+    table.insert(lines, Text.section("Quick Start", {}, true)[1])
 
-    local about_text = [[
-MCP Hub is a Neovim plugin for interacting with MCP (Model Context Protocol) servers.
-It provides a central interface for managing multiple MCP servers and monitoring their
-status and communication.
+    local intro_text = [[
+MCPHub manages MCP (Model Context Protocol) servers through a centralized config file while providing an intuitive interface for testing tools and resources. Perfect for LLM integration with your Neovim workflow.
 
-For more information, visit:
-https://github.com/ravitemer/mcphub.nvim
+Basic Usage:
+• Browse server status and tools in Main view
+• Test tools and resources in Servers view
+• Monitor logs in Logs view
+• Configure servers in Config view
+• Get help with '?' key
+
+Key Commands:
+• :MCPHub - Toggle this window
+• r - Refresh server status
+• q - Close window
 ]]
 
-    for _, line in ipairs(Text.multiline(about_text, Text.highlights.muted)) do
+    for _, line in ipairs(Text.multiline(intro_text, Text.highlights.muted)) do
         table.insert(lines, Text.pad_line(line))
     end
 
@@ -47,88 +54,69 @@ end
 
 function HelpView:render_navigation()
     local lines = {}
-    table.insert(lines, Text.section("Navigation", {}, true)[1])
+    table.insert(lines, Text.section("Views & Navigation", {}, true)[1])
 
     local nav_items = {{
         key = "H",
-        desc = "Home view - Overview and server status"
+        name = "Home",
+        desc = "Server status and overview"
     }, {
         key = "S",
-        desc = "Servers view - Server details and status"
+        name = "Servers",
+        desc = "Test tools and resources interactively"
     }, {
         key = "C",
-        desc = "Config view - Server configuration"
+        name = "Config",
+        desc = "Server configuration"
     }, {
         key = "L",
-        desc = "Logs view - Server and plugin logs"
+        name = "Logs",
+        desc = "Server and plugin logs"
     }, {
         key = "?",
-        desc = "Help view - This help page"
-    }, {
-        key = "q",
-        desc = "Close window"
+        name = "Help",
+        desc = "This help information"
     }}
 
     for _, item in ipairs(nav_items) do
-        local line = NuiLine():append(item.key, Text.highlights.header_shortcut):append(" - ", Text.highlights.muted)
-            :append(item.desc, Text.highlights.muted)
+        -- View name and shortcut
+        local name_line = NuiLine():append(" " .. item.key .. " ", Text.highlights.header_shortcut):append(" - ",
+            Text.highlights.muted):append(item.name, Text.highlights.success)
+        table.insert(lines, Text.pad_line(name_line))
+
+        -- View description
+        local desc_line = NuiLine():append("  ", Text.highlights.muted):append(item.desc, Text.highlights.muted)
+        table.insert(lines, Text.pad_line(desc_line))
+        table.insert(lines, Text.pad_line(NuiLine()))
+    end
+
+    return lines
+end
+
+function HelpView:render_capabilities()
+    local lines = {}
+    table.insert(lines, Text.section("Working with Servers", {}, true)[1])
+
+    local capabilities_text = [[
+Testing Tools and Resources:
+• In Servers view (press 'S'), browse available capabilities
+• Select a tool/resource and press <CR> to interact
+• Enter parameters for tools when prompted
+• View raw or parsed responses
+• Press <Esc> to exit capability mode
+
+Server Management:
+• Main view shows real-time status
+• Logs view tracks activity and errors
+• Config view for server settings
+• Use 'r' to refresh status
+]]
+
+    for _, line in ipairs(Text.multiline(capabilities_text, Text.highlights.muted)) do
         table.insert(lines, Text.pad_line(line))
     end
 
     table.insert(lines, Text.empty_line())
-    return lines
-end
-
-function HelpView:render_view_keys()
-    local lines = {}
-    table.insert(lines, Text.section("View-Specific Keys", {}, true)[1])
-
-    local view_keys = {{
-        name = "Main View",
-        keys = {{
-            key = "r",
-            desc = "Refresh"
-        }, {
-            key = "R",
-            desc = "Restart server"
-        }}
-    }, {
-        name = "Servers View",
-        keys = {{
-            key = "<CR>",
-            desc = "Open/Execute capability"
-        }, {
-            key = "<Esc>",
-            desc = "Exit capability mode"
-        }}
-    }, {
-        name = "Logs View",
-        keys = {{
-            key = "x",
-            desc = "Clear logs"
-        }}
-    }, {
-        name = "Config View",
-        keys = {{
-            key = "e",
-            desc = "Edit configuration"
-        }}
-    }}
-
-    for _, section in ipairs(view_keys) do
-        -- Section name
-        local name_line = NuiLine():append(section.name .. ":", Text.highlights.header)
-        table.insert(lines, Text.pad_line(name_line))
-
-        -- Keys
-        for _, key in ipairs(section.keys) do
-            local key_line = NuiLine():append("  "):append(key.key, Text.highlights.header_shortcut):append(" - ",
-                Text.highlights.muted):append(key.desc, Text.highlights.muted)
-            table.insert(lines, Text.pad_line(key_line))
-        end
-        table.insert(lines, Text.empty_line())
-    end
-
     return lines
 end
 
@@ -138,16 +126,21 @@ function HelpView:render_troubleshooting()
 
     local help_text = [[
 Common Issues:
-• Server not connecting - Check if mcp-hub is installed globally
-• Invalid config - Verify your config file format
-• Version mismatch - Update mcp-hub to required version
 
-For more help:
-• Check server logs in the Logs view (L)
-• View configuration in Config view (C)
-• Visit the GitHub repository for documentation
+1. Server Connection
+   • Check port availability in Config view
+   • Another server might be running
+   • Check Logs view for errors
 
-If problems persist, please report issues on GitHub.
+2. Tool/Resource Errors
+   • Verify server is connected
+   • Check parameter values
+   • See Logs view for details
+
+Need More Help?
+• View logs for detailed errors
+• Check MCP Inspector tool
+• Visit: github.com/ravitemer/mcphub.nvim
 ]]
 
     for _, line in ipairs(Text.multiline(help_text, Text.highlights.muted)) do
@@ -162,9 +155,9 @@ function HelpView:render()
     local lines = self:render_header()
 
     -- Add help sections
-    vim.list_extend(lines, self:render_about())
+    vim.list_extend(lines, self:render_quick_start())
     vim.list_extend(lines, self:render_navigation())
-    vim.list_extend(lines, self:render_view_keys())
+    vim.list_extend(lines, self:render_capabilities())
     vim.list_extend(lines, self:render_troubleshooting())
 
     return lines

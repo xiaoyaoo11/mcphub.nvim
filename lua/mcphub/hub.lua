@@ -469,20 +469,20 @@ function MCPHub:refresh()
     end
 end
 
-function MCPHub:restart(callback)
-    if not self:ensure_ready() then
-        return
-    end
-    if self.is_owner then
-        self:stop()
-        State:reset()
-        self:start(nil, callback)
-    else
-        vim.notify("Only the owner can restart the server", vim.log.levels.INFO)
-        self:refresh()
-        callback(true)
-    end
-end
+-- function MCPHub:restart(callback)
+--     if not self:ensure_ready() then
+--         return
+--     end
+--     if self.is_owner then
+--         self:stop()
+--         State:reset()
+--         self:start(nil, callback)
+--     else
+--         vim.notify("Only the owner can restart the server", vim.log.levels.INFO)
+--         self:refresh()
+--         callback(true)
+--     end
+-- end
 
 function MCPHub:ensure_ready()
     if not self:is_ready() then

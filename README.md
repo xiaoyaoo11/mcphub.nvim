@@ -5,18 +5,26 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 
-> A powerful Neovim plugin for managing MCP (Model Context Protocol) servers through [mcp-hub](https://github.com/ravitemer/mcp-hub).
+<div align="center">
+  <p>
+    <h3>MCP Hub Interface</h3>
+    <video controls muted src="public/demo.mp4"></video>
+  </p>
+</div>
+
+A powerful Neovim plugin that integrates MCP (Model Context Protocol) servers into your workflow. Configure and manage MCP servers through a centralized config file while providing an intuitive UI for testing tools and resources. Perfect for LLM integration, offering both programmatic API access and interactive testing capabilities through the `:MCPHub` command.
 
 ## ✨ Features
 
 - Simple single-command interface (`:MCPHub`)
-- Automatic server lifecycle management
+- Interactive UI for testing tools and resources
+- Automatic server lifecycle management across multiple Neovim instances
+- Smart shutdown handling with configurable delay
 - Both sync and async operations supported
 - Clean client registration/cleanup
-- Smart process handling
-- Configurable logging support
+- Comprehensive API for tool and resource access
 
-## Installation
+## 📦 Installation
 
 Using [lazy.nvim](https://github.com/folke/lazy.nvim):
 
@@ -24,420 +32,210 @@ Using [lazy.nvim](https://github.com/folke/lazy.nvim):
 {
     "ravitemer/mcphub.nvim",
     dependencies = {
-        "nvim-lua/plenary.nvim",  -- Required for HTTP requests
+        "nvim-lua/plenary.nvim",  -- Required for Job and HTTP requests
     },
-    build = "npm install -g mcp-hub@latest", -- Install specific version
+    build = "npm install -g mcp-hub@latest", -- Installs required mcp-hub npm module
     config = function()
         require("mcphub").setup({
+            -- Required options
             port = 3000,  -- Port for MCP Hub server
-            config = vim.fn.expand("~/.config/mcp-hub/config.json"),  -- Config file path
-            log = {  -- Optional logging configuration
-                level = vim.log.levels.WARN,  -- Log level (ERROR, WARN, INFO, DEBUG)
-                to_file = false,  -- Whether to log to file
-                file_path = nil,  -- Log file path
-                prefix = "MCPHub"  -- Log message prefix
-            },
+            config = vim.fn.expand("~/mcpservers.json"),  -- Absolute path to config file
+
+            -- Optional options
             on_ready = function(hub)
                 -- Called when hub is ready
             end,
             on_error = function(err)
                 -- Called on errors
-            end
+            end,
+            shutdown_delay = 10000, -- Wait 10s before shutting down server after last client exits
+            log = {
+                level = vim.log.levels.WARN,
+                to_file = false,
+                file_path = nil,
+                prefix = "MCPHub"
+            },
         })
     end
 }
 ```
 
-## Usage
+### Requirements
 
-### For A Chat Plugin
+- Neovim >= 0.8.0
+- Node.js >= 18.0.0
+- [plenary.nvim](https://github.com/nvim-lua/plenary.nvim)
+- [mcp-hub](https://github.com/ravitemer/mcp-hub) (automatically installed via build command)
+
+## 🚀 Usage
+
+1. Open the MCPHub UI to test tools and monitor server status:
+
+```vim
+:MCPHub
+```
+
+2. Use the hub instance in your code:
 
 ```lua
+-- Get hub instance after setup
 local mcphub = require("mcphub")
 
--- Setup plugin with logging and callbacks
+-- Option 1: Use on_ready callback
 mcphub.setup({
     port = 3000,
-    config = vim.fn.expand("~/.config/mcp-hub/config.json"),
+    config = vim.fn.expand("~/mcpservers.json"),
     on_ready = function(hub)
-        -- Ready to use MCP features
-        -- Using async mode (non-blocking)
-        hub:get_servers({
-            callback = function(response, err)
-                if err then return end
-                local servers = response.servers -- Extract servers from response
-                -- Use servers data
-            end
-        })
-
-        -- Or using sync mode (blocking)
-        local response, err = hub:get_servers()
-        if not err then
-            local servers = response.servers -- Extract servers from response
-        end
-    end,
-    on_error = function(err)
-        -- Error will be automatically logged
+        -- Hub is ready to use here
     end
 })
 
--- Get instance for API access
+-- Option 2: Get hub instance directly (might be nil if setup in progress)
 local hub = mcphub.get_hub_instance()
 
--- All methods support both sync and async modes and return raw responses:
-
--- Async mode (non-blocking)
-hub:call_tool("server-name", "tool-name", {
-    -- Tool arguments
+-- Call a tool (sync)
+local response, err = hub:call_tool("server-name", "tool-name", {
+    param1 = "value1"
 }, {
-    callback = function(response, error)
-        if error then
-            -- Error will be automatically logged at appropriate level
-            return
-        end
-        local result = response.result -- Extract result from response
-        -- Use tool result
-    end
+    return_text = true -- Parse response to LLM-suitable text
 })
 
--- Sync mode (blocking)
-local response, error = hub:call_tool("server-name", "tool-name", {
-    -- Tool arguments
-})
-if error then
-    -- Handle error
-    return
-end
-local result = response.result -- Extract result from response
--- Use result
-
--- Access resources (async)
-hub:access_resource("server-name", "resource://uri", {
-    callback = function(response, error)
-        if error then
-            -- Error will be automatically logged
-            return
-        end
-        local content = response.content -- Extract content from response
-        -- Use resource data
-    end
-})
-
--- Access resources (sync)
-local response, error = hub:access_resource("server-name", "resource://uri")
-if error then
-    -- Handle error
-    return
-end
-local content = response.content -- Extract content from response
--- Use resource data
-
--- Get server status (async)
-hub:get_health({
+-- Call a tool (async)
+hub:call_tool("server-name", "tool-name", {
+    param1 = "value1"
+}, {
+    return_text = true,
     callback = function(response, err)
-        if err then return end
-        -- Use raw response information
+        -- Use response
     end
 })
 
--- Get server status (sync)
-local response, err = hub:get_health()
-if not err then
-    -- Use raw response
-end
-
--- Get available servers (async)
-hub:get_servers({
-    callback = function(response, err)
-        if err then return end
-        local servers = response.servers -- Extract servers from response
-        -- Use servers list
-    end
+-- Access resource (sync)
+local response, err = hub:access_resource("server-name", "resource://uri", {
+    return_text = true
 })
 
--- Get available servers (sync)
-local response, err = hub:get_servers()
-if not err then
-    local servers = response.servers -- Extract servers from response
-end
-
--- Get specific server info (async)
-hub:get_server_info("server-name", {
-    callback = function(response, err)
-        if err then return end
-        if response.server then -- Extract server from response
-            -- Server found
-        else
-            -- Server not found
-        end
-    end
+-- Get prompt helpers for system prompts
+local prompts = hub:get_prompts({
+    use_mcp_tool_example = [[<use_mcp_tool>
+<server_name>weather-server</server_name>
+<tool_name>get_forecast</tool_name>
+<arguments>
+{
+  "city": "San Francisco",
+  "days": 5
+}
+</arguments>
+</use_mcp_tool>]],
+    access_mcp_resource_example = [[<access_mcp_resource>
+<server_name>weather-server</server_name>
+<uri>weather://san-francisco/current</uri>
+</access_mcp_resource>]]
 })
-
--- Get specific server info (sync)
-local response, err = hub:get_server_info("server-name")
-if not err and response.server then -- Extract server from response
-    -- Server found
-else
-    -- Server not found
-end
+-- prompts.active_servers: Lists currently active servers
+-- prompts.use_mcp_tool: Instructions for tool usage with example
+-- prompts.access_mcp_resource: Instructions for resource access with example
 ```
 
-## API Reference
+## 🔌 Extensions
 
-### REST API Endpoints
+MCPHub.nvim provides extensions that integrate with popular Neovim chat plugins. These extensions allow you to use MCP tools and resources directly within your chat interfaces.
 
-You can directly access the MCP Hub server's API at `http://localhost:<port>/api/`. Available endpoints:
+### Available Extensions
 
-- `GET /api/health` - Server health check
-- `GET /api/servers` - List all connected servers
-- `GET /api/servers/{name}` - Get specific server info
-- `POST /api/servers/{name}/tools` - Call a tool
-- `POST /api/servers/{name}/resources` - Access a resource
+- **[CodeCompanion](https://github.com/olimorris/codecompanion.nvim) Integration**: Add MCP capabilities to CodeCompanion
+  ```lua
+  tools = {
+    ["mcp"] = {
+      callback = require("mcphub.extensions.codecompanion"),
+      description = "Call tools and resources from the MCP Servers",
+      opts = {
+        user_approval = true,
+      },
+    },
+  }
+  ```
 
-### MCP Server Schema
+See the [extensions/](extensions/) folder for more examples and implementation details.
 
-Each MCP Server information follows this schema:
+Note: You can also access the Express server directly at http://localhost:[port]/api
 
-```typescript
-{
-  name: string,
-  status: "disconnected" | "connecting" | "connected",
-  error: string | null,
-  capabilities: {
-    tools: Array<{
-      name: string,
-      description: string,
-      inputSchema: object // Tool-specific parameters
-    }>,
-    resources: Array<{
-      uri: string,
-      name: string,
-      mimeTime: string
-    }>
-  },
-  uptime: number,    // Server uptime in seconds
-  lastStarted: string // ISO timestamp
-}
-```
+## 🔧 Troubleshooting
 
-### Tool Response Schema
+1. **Port Issues**
 
-```typescript
-{
-  result: any, // Tool-specific result data
-  error?: string // Error message if failed
-}
-```
+   - If you get `EADDRINUSE` error, kill the existing process:
+     ```bash
+     lsof -i :[port]  # Find process ID
+     kill [pid]       # Kill the process
+     ```
 
-### Resource Response Schema
+2. **Configuration File**
 
-```typescript
-{
-result : any,
-error?: string
-}
-```
+   - Ensure config path is absolute
+   - Verify file contains valid JSON with `mcpServers` key
+   - Check server-specific configuration requirements
 
-## API Reference
+3. **MCP Server Issues**
 
-```lua
--- Server Management (all support both sync/async and return raw responses)
-hub:check_server(opts?)           -- callback(is_running: boolean) or returns boolean
-hub:get_health(opts?)            -- callback(response: table, error?: string) or returns table|nil, string|nil
-hub:get_servers(opts?)           -- callback(response: table, error?: string) or returns table|nil, string|nil
-hub:get_server_info(name, opts?) -- callback(response: table, error?: string) or returns table|nil, string|nil
+   - Use [MCP Inspector](https://github.com/modelcontextprotocol/inspector) to verify server operation
+   - Check server logs in MCPHub UI (Logs view)
 
--- Tool/Resource Access (all support both sync/async and return raw responses)
-hub:call_tool(server, tool, args, opts?)      -- callback(response: table|nil, error?: string) or returns table|nil, string|nil
-hub:access_resource(server, uri, opts?)       -- callback(response: table|nil, error?: string) or returns table|nil, string|nil
+4. **Need Help?**
+   - Create a [Discussion](https://github.com/ravitemer/mcphub.nvim/discussions) for questions
+   - Open an [Issue](https://github.com/ravitemer/mcphub.nvim/issues) for bugs
 
--- Health/Status
-hub:is_ready()        -- returns boolean (sync, safe to call)
-```
+## 🔄 How It Works
 
-## Architecture
+MCPHub.nvim uses an Express server to manage MCP servers and handle client requests:
 
-### Server Lifecycle
+1. When `setup()` is called:
+
+   - Checks for mcp-hub command installation
+   - Verifies version compatibility
+   - Starts mcp-hub with provided port and config file
+   - Creates Express server at localhost:[port]
+
+2. After successful setup:
+
+   - Calls on_ready callback with hub instance
+   - Hub instance provides REST API interface
+   - UI updates in real-time via `:MCPHub` command
+
+3. Express Server Features:
+
+   - Manages MCP server configurations
+   - Handles tool execution requests
+   - Provides resource access
+   - Multi-client support
+   - Automatic cleanup
+
+4. When Neovim instances close:
+   - Unregister as clients
+   - Last client triggers shutdown timer
+   - Server waits shutdown_delay seconds before stopping
+   - Timer cancels if new client connects
+
+This architecture ensures:
+
+- Consistent server management
+- Real-time status monitoring
+- Efficient resource usage
+- Clean process handling
+- Multiple client support
+
+### Architecture Flows
 
 ![Server Lifecycle](public/diagrams/server-lifecycle.png)
 
-The diagram above shows how multiple Neovim instances interact with a single MCP Hub server. The first instance starts the server, while others connect to the existing one. When the last client disconnects, the server automatically shuts down.
-
-### Request Flow
-
 ![Request Flow](public/diagrams/request-flow.png)
-
-Operations can be either synchronous (blocking) or asynchronous (using callbacks). The diagram shows the request flow from initial startup to status display.
-
-### Cleanup Process
 
 ![Cleanup Flow](public/diagrams/cleanup-flow.png)
 
-The cleanup process ensures proper resource management and server shutdown. It handles both individual client disconnection and full server shutdown when appropriate.
-
-### API Interaction
-
 ![API Flow](public/diagrams/api-interaction.png)
 
-All API functions support both sync and async patterns:
+## 👏 Acknowledgements
 
-1. Sync: Direct return values (raw responses)
-2. Async: Handle response in callback
-3. Error handling in both modes
-4. State management carried through
+Thanks to:
 
-## Logging Configuration
-
-The plugin supports configurable logging with the following options:
-
-```lua
-{
-    level = vim.log.levels.WARN,  -- Log level threshold
-    to_file = false,             -- Enable file logging
-    file_path = nil,             -- Path to log file
-    prefix = "MCPHub"            -- Prefix for log messages
-}
-```
-
-## Requirements
-
-- Neovim >= 0.8.0
-- [plenary.nvim](https://github.com/nvim-lua/plenary.nvim)
-- Node.js >= 18.0.0 (for mcp-hub)
-- [mcp-hub](https://github.com/ravitemer/mcp-hub)
-
-## Error Handling
-
-```lua
--- Example error handling (async mode)
-hub:call_tool("server", "tool", args, {
-    callback = function(response, error)
-        if error then
-            -- Errors are automatically logged at appropriate levels
-            return
-        end
-        local result = response.result -- Extract result from response
-        -- Use result
-    end
-})
-
--- Example error handling (sync mode)
-local response, error = hub:call_tool("server", "tool", args)
-if error then
-    -- Handle error
-    return
-end
-local result = response.result -- Extract result from response
--- Use result
-```
-
-## Troubleshooting
-
-1. **Server Won't Start**
-
-   - Check if port is available
-   - Verify mcp-hub installation
-   - Check config file path
-   - Enable DEBUG log level for detailed output
-   - Check log file if file logging enabled
-   - Test API directly: `curl http://localhost:3000/api/health`
-
-2. **Connection Issues**
-
-   - Ensure server is running (quick health check timeout)
-   - Check port configuration
-   - Verify client registration
-   - Monitor log output for connection attempts
-   - Test API endpoints directly with curl
-
-3. **Status Shows Not Ready**
-   - Check server health
-   - Verify connection state
-   - Check error callbacks
-   - Review logs for startup sequence
-   - Check API health endpoint
-
-## 🤝 Contributing
-
-Contributions are welcome! Please read our [Contributing Guidelines](./CONTRIBUTING.md) for details on how to submit pull requests, report issues, and contribute to the project.
-
-## 🔒 Security
-
-Found a security issue? Please review our [Security Policy](./SECURITY.md) and follow the vulnerability reporting process.
-
-## 📝 Changelog
-
-See [CHANGELOG.md](./CHANGELOG.md) for a detailed list of changes between releases.
-
-## 📜 Code of Conduct
-
-This project follows a [Code of Conduct](./CODE_OF_CONDUCT.md) to ensure a welcoming and inclusive environment for all contributors.
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE.md](./LICENSE.md) file for details.
-
-## 🗺️ Roadmap
-
-### Upcoming Features
-
-1. **Enhanced UI Integration**
-
-   - Lazy.nvim/Mason-style interface for MCP server management
-   - Interactive server status dashboard
-   - Tool and resource browser with filtering and search
-   - Rich command palette integration
-   - Floating windows for tool execution and resource viewing
-
-2. **Prompt Engineering Utilities**
-
-   - Smart server selection based on prompt content
-   - Automatic tool/resource selection helpers
-   - Prompt templates and generators
-   - Context-aware prompt building
-   - Response parsing and formatting utilities
-
-3. **Server Management Improvements**
-
-   - Server health monitoring dashboard
-   - Performance metrics and analytics
-   - Auto-recovery and failover strategies
-   - Configuration management UI
-   - Batch operations support
-
-4. **Developer Tools**
-
-   - Server capability introspection
-   - Tool response debugger
-   - Request/response logging viewer
-   - Performance profiling tools
-   - Test utilities for MCP integrations
-
-5. **Quality of Life Features**
-   - Command history and favorites
-   - Customizable keymaps
-   - Telescope integration
-   - Snippet generation from responses
-   - Session persistence
-
-### Long-term Goals
-
-1. **Community Integration**
-
-   - Server discovery and sharing
-   - Tool/resource marketplace
-   - Community templates and configs
-   - Integration guides and examples
-
-2. **Advanced Features**
-   - Multi-server orchestration
-   - Response caching and optimization
-   - Custom server templates
-   - Automated workflow creation
-   - Integration with popular Neovim plugins
-
-Your contributions and suggestions are welcome! Feel free to open issues or submit pull requests to help implement these features.
-
-## ⭐ Show Your Support
-
-Give a ⭐️ if this project helped you!
+- [nui.nvim](https://github.com/MunifTanjim/nui.nvim) for inspiring our text highlighting utilities
