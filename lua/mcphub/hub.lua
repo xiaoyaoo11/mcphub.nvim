@@ -31,6 +31,7 @@ function MCPHub:new(opts)
     -- Set up instance fields
     self.port = opts.port
     self.config = opts.config
+    self.shutdown_delay = opts.shutdown_delay or 0;
     self.ready = false
     self.server_job = nil
     self.is_owner = false -- Whether we started the server
@@ -54,6 +55,7 @@ end
 --- Start the MCP Hub server
 --- @param opts? { on_ready: function, on_error: function }
 function MCPHub:start(opts, restart_callback)
+
     opts = opts or State.config
 
     -- Update state
@@ -78,7 +80,8 @@ function MCPHub:start(opts, restart_callback)
 
         self.server_job = Job:new({
             command = "mcp-hub",
-            args = {"--port", tostring(self.port), "--config", self.config},
+            args = {"--port", tostring(self.port), "--config", self.config, "--shutdown-delay", self.shutdown_delay},
+            detached = true,
             on_stdout = vim.schedule_wrap(function(_, data)
                 if has_called_restart_callback == false then
                     if restart_callback then
@@ -470,12 +473,15 @@ function MCPHub:restart(callback)
     if not self:ensure_ready() then
         return
     end
-    self:stop()
-    State:reset()
-    local restart_callback = function(success)
-        callback(success)
+    if self.is_owner then
+        self:stop()
+        State:reset()
+        self:start(nil, callback)
+    else
+        vim.notify("Only the owner can restart the server", vim.log.levels.INFO)
+        self:refresh()
+        callback(true)
     end
-    self:start(nil, restart_callback)
 end
 
 function MCPHub:ensure_ready()

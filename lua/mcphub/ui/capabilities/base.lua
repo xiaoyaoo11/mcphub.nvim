@@ -69,13 +69,13 @@ function CapabilityHandler:handle_cursor_move(view, line)
     if type == "submit" and not self.state.is_executing then
         view.cursor_highlight = vim.api.nvim_buf_set_extmark(view.ui.buffer, view.hover_ns, line - 1, 0, {
             line_hl_group = highlights.active_item,
-            virt_text = {{"Press <CR> to submit", highlights.muted}},
+            virt_text = {{"Press <CR> to submit", highlights.active_item_muted}},
             virt_text_pos = "eol"
         })
     elseif type == "input" then
         view.cursor_highlight = vim.api.nvim_buf_set_extmark(view.ui.buffer, view.hover_ns, line - 1, 0, {
             line_hl_group = highlights.active_item,
-            virt_text = {{"Press <CR> to edit", highlights.muted}},
+            virt_text = {{"Press <CR> to edit", highlights.active_item_muted}},
             virt_text_pos = "eol"
         })
     end

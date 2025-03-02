@@ -131,6 +131,12 @@ function M.render_logo(width)
     return lines
 end
 
+-- 
+-- 
+function M.pill(text, highlight)
+    return NuiLine():append("", M.highlights.title):append(text, highlight):append("", M.highlights.title)
+end
+
 --- Create header with buttons
 ---@param width number Window width
 ---@param current_view string Currently selected view

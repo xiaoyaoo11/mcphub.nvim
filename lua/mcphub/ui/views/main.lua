@@ -28,11 +28,9 @@ function MainView:get_initial_cursor_position()
 end
 
 --- Render server status section
----@param width number Window width
 ---@return NuiLine[]
-function MainView:render_server_status(width)
+function MainView:render_server_status()
     local lines = {}
-
     -- Server state header and status
     local status_text = ({
         connected = "Connected",
@@ -54,17 +52,13 @@ function MainView:render_server_status(width)
     })[State.server_state.status] or "⚠ "
 
     local status_line = NuiLine():append(status_icon, status_hl):append(status_text, status_hl)
-
+    if State.server_state.started_at then
+        local utils = require("mcphub.utils")
+        status_line:append(" " .. utils.format_relative_time(State.server_state.started_at), Text.highlights.muted)
+    end
     table.insert(lines, Text.pad_line(status_line))
 
-    if State.server_state.status == "connected" then
-        if State.server_state.started_at then
-            local utils = require("mcphub.utils")
-            local time_line = NuiLine():append("Started ", Text.highlights.muted):append(utils.format_relative_time(
-                State.server_state.started_at))
-            table.insert(lines, Text.pad_line(time_line))
-        end
-    else
+    if State.server_state.status ~= "connected" then
         vim.list_extend(lines, renderer.render_server_entries(State.server_output.entries, false))
     end
     table.insert(lines, Text.empty_line())
@@ -84,13 +78,13 @@ function MainView:render_servers()
     end
 
     -- Section header
-    table.insert(lines, Text.section("Connected Servers", {}, true)[1])
+    table.insert(lines, Text.section("MCP Servers", {}, true)[1])
 
     -- Show each server
     for _, server in ipairs(State.server_state.servers) do
         -- Server name and status
         local server_line = NuiLine():append("• ", Text.highlights.muted):append(server.name .. " ",
-            Text.highlights.success):append("(" .. server.status .. ")", Text.highlights.info)
+            Text.highlights.success):append("(" .. server.status .. ")", Text.highlights.muted)
         table.insert(lines, Text.pad_line(server_line))
 
         -- Server capabilities
@@ -115,17 +109,12 @@ function MainView:render()
 
     -- Get base header
     local lines = self:render_header()
-    local width = self:get_width()
-
     -- Server status section
-    vim.list_extend(lines, self:render_server_status(width))
-
-    -- Connected servers section
+    vim.list_extend(lines, self:render_server_status())
+    -- Servers section
     vim.list_extend(lines, self:render_servers())
-
     -- Recent errors section
     vim.list_extend(lines, renderer.render_hub_errors(State.errors.server))
-
     return lines
 end
 

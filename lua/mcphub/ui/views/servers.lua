@@ -9,7 +9,6 @@ local NuiLine = require("mcphub.utils.nuiline")
 local renderer = require("mcphub.utils.renderer")
 local Capabilities = require("mcphub.ui.capabilities")
 local utils = require("mcphub.utils")
-
 ---@class ServersView
 ---@field super View
 ---@field cursor_highlight number|nil Extmark ID for current highlight
@@ -63,7 +62,7 @@ function ServersView:handle_cursor_move()
     if cap_type then
         self.cursor_highlight = vim.api.nvim_buf_set_extmark(self.ui.buffer, self.hover_ns, line - 1, 0, {
             line_hl_group = Text.highlights.active_item,
-            virt_text = {{"Press <CR> to open", Text.highlights.muted}},
+            virt_text = {{"Press <CR> to open", Text.highlights.active_item_muted}},
             virt_text_pos = "eol"
         })
     end
@@ -85,6 +84,13 @@ function ServersView:get_line_info(line_nr)
             for _, resource in ipairs(section.resources) do
                 if resource.line == line_nr then
                     return server_name, "resource", resource.info
+                end
+            end
+
+            -- Check resource templates
+            for _, resourceTemplate in ipairs(section.resourceTemplates) do
+                if resourceTemplate.line == line_nr then
+                    return server_name, "resourceTemplate", resourceTemplate.info
                 end
             end
             return server_name, nil, nil
@@ -273,7 +279,8 @@ function ServersView:render()
                 local section = {
                     start_line = current_line + 1,
                     tools = {},
-                    resources = {}
+                    resources = {},
+                    resourceTemplates = {}
                 }
 
                 -- Store tool line numbers during render
@@ -317,8 +324,8 @@ function ServersView:render_server_details(server, line_offset, section)
     local lines = {}
 
     -- Server header
-    local title = NuiLine():append("╭─ ", Text.highlights.muted):append(" " .. server.name .. " ",
-        Text.highlights.header_btn)
+    local title = NuiLine():append("╭─", Text.highlights.muted):append(Text.pill(server.name,
+        Text.highlights.header_btn))
     table.insert(lines, Text.pad_line(title))
 
     -- Server details
@@ -369,10 +376,9 @@ function ServersView:render_server_details(server, line_offset, section)
 
             for _, resource in ipairs(server.capabilities.resources) do
                 local res_line = NuiLine():append("│  • ", Text.highlights.muted):append(resource.name,
-                    Text.highlights.success):append(" (", Text.highlights.muted):append(resource.mimeType,
+                    Text.highlights.success):append(" (", Text.highlights.muted):append(resource.mimeType or "unknown",
                     Text.highlights.info):append(")", Text.highlights.muted)
                 table.insert(lines, Text.pad_line(res_line))
-
                 -- Track resource line number for interaction
                 local line_nr = line_offset + #lines
                 table.insert(section.resources, {
@@ -391,6 +397,36 @@ function ServersView:render_server_details(server, line_offset, section)
                 end
             end
         end
+
+        -- Resource templates
+        if #server.capabilities.resourceTemplates > 0 then
+            table.insert(lines, Text.pad_line(NuiLine():append("│", Text.highlights.muted)))
+            table.insert(lines, Text.pad_line(
+                NuiLine():append("│ ", Text.highlights.muted):append(" Resource Templates: ", Text.highlights.header)))
+
+            for _, template in ipairs(server.capabilities.resourceTemplates) do
+                local res_line = NuiLine():append("│  • ", Text.highlights.muted):append(template.name,
+                    Text.highlights.success):append(" (", Text.highlights.muted):append(template.mimeType or "unknown",
+                    Text.highlights.info):append(")", Text.highlights.muted)
+                table.insert(lines, Text.pad_line(res_line))
+                -- Track resource line number for interaction
+                local line_nr = line_offset + #lines
+                table.insert(section.resourceTemplates, {
+                    name = template.name,
+                    line = line_nr,
+                    info = template
+                })
+                -- Resource description if any
+                if template.description then
+                    for _, desc_line in ipairs(Text.multiline(template.description, Text.highlights.muted)) do
+                        local desc = NuiLine():append("│    ", Text.highlights.muted):append(desc_line,
+                            Text.highlights.muted)
+                        table.insert(lines, Text.pad_line(desc))
+                    end
+                end
+            end
+        end
+
     end
 
     -- Server footer

@@ -3,11 +3,12 @@ local M = {}
 -- Load capability handlers
 M.handlers = {
     tool = require("mcphub.ui.capabilities.tool"),
-    resource = require("mcphub.ui.capabilities.resource")
+    resource = require("mcphub.ui.capabilities.resource"),
+    resourceTemplate = require("mcphub.ui.capabilities.resourceTemplate")
 }
 
 -- Create a new capability handler instance
----@param type string Capability type ("tool", "resource", etc)
+---@param type string Capability type ("tool", "resource", "resourceTemplate", etc)
 ---@param server_name string Server name
 ---@param capability_info table Raw capability info from server
 ---@return CapabilityHandler Handler instance

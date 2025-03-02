@@ -16,7 +16,8 @@ M.groups = {
     muted = "MCPHubMuted",
     window_normal = "MCPHubNormal",
     window_border = "MCPHubBorder",
-    active_item = "MCPHubActiveItem"
+    active_item = "MCPHubActiveItem",
+    active_item_muted = "MCPHubActiveItemMuted"
 }
 
 -- Setup highlight groups
@@ -61,11 +62,16 @@ function M.setup()
 
         -- Interactive elements
         [M.groups.active_item] = {
-            bg = "#2a2a2a",
-            fg = "#c792ea",
+            fg = "#111111",
+            bg = "#89d185",
             bold = true
         },
-
+        -- Interactive elements
+        [M.groups.active_item_muted] = {
+            bg = "#89d185",
+            fg = "#555555",
+            bold = true
+        },
         -- Status and messages
         [M.groups.error] = {
             bg = "NONE",
