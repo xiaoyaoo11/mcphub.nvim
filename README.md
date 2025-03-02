@@ -5,14 +5,14 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 
-<div align="center">
-  <p>
-    <h3>MCP Hub Interface</h3>
-    <video controls muted src="public/demo.mp4"></video>
-  </p>
-</div>
-
 A powerful Neovim plugin that integrates MCP (Model Context Protocol) servers into your workflow. Configure and manage MCP servers through a centralized config file while providing an intuitive UI for testing tools and resources. Perfect for LLM integration, offering both programmatic API access and interactive testing capabilities through the `:MCPHub` command.
+
+<div align="center">
+<p>
+<h3>MCP Hub Interface</h3>
+<video controls muted src="https://github.com/user-attachments/assets/9e574d2d-358e-4a3e-ae19-d9e85c5dd2f0"></video>
+</p>
+</div>
 
 ## ✨ Features
 
@@ -226,13 +226,13 @@ This architecture ensures:
 
 ### Architecture Flows
 
-![Server Lifecycle](public/diagrams/server-lifecycle.png)
+![Server Lifecycle](https://github.com/user-attachments/assets/a26422fe-ba98-4cfc-9cbe-9e3867e1625f)
 
-![Request Flow](public/diagrams/request-flow.png)
+![Request Flow](https://github.com/user-attachments/assets/319f203f-615b-4de0-846f-fd444498770c)
 
-![Cleanup Flow](public/diagrams/cleanup-flow.png)
+![Cleanup Flow](https://github.com/user-attachments/assets/0ccec454-6d0c-4460-9b2d-0e597bab2ae9)
 
-![API Flow](public/diagrams/api-interaction.png)
+![API Flow](https://github.com/user-attachments/assets/5b3fb3d2-aa37-499f-badd-b4cfc1c59e71)
 
 ## 👏 Acknowledgements
 
