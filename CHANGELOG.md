@@ -5,6 +5,50 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2025-03-02
+
+### Added
+
+- New UI system with comprehensive views
+  - Main view for server status
+  - Servers view for tools and resources
+  - Config view for settings
+  - Logs view for output
+  - Help view with quick start guide
+- Interactive tool and resource execution interface
+  - Parameter validation and type conversion
+  - Real-time response display
+  - Cursor tracking and highlighting
+- CodeCompanion extension support
+  - Integration with chat interface
+  - Tool and resource access
+- Enhanced state management
+  - Server output handling
+  - Error display with padding
+  - Cursor position persistence
+- Server utilities
+  - Uptime formatting
+  - Shutdown delay handling
+  - Configuration validation
+
+### Changed
+
+- Improved parameter handling with ordered retrieval
+- Enhanced text rendering with pill function
+- Better error display with padding adjustments
+- Refined UI layout and keymap management
+- Updated server output management
+- Enhanced documentation with quick start guide
+- Upgraded version compatibility with mcp-hub 1.3.0
+
+### Refactored
+
+- Server uptime formatting moved to utils
+- Tool execution mode improvements
+- Error handling and server output management
+- Configuration validation system
+- UI rendering system
+
 ## [1.2.0] - 2024-02-22
 
 ### Added
