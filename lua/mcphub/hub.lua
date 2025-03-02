@@ -513,6 +513,10 @@ function MCPHub:get_access_mcp_resource_prompt(opts)
     return prompt_utils.get_access_mcp_resource_prompt(opts)
 end
 
+function MCPHub:get_state()
+    return State
+end
+
 --- Get all MCP system prompts
 ---@param opts? {use_mcp_tool_example?: string, access_mcp_resource_example?: string}
 ---@return {active_servers: string|nil, use_mcp_tool: string, access_mcp_resource: string}

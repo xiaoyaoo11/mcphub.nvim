@@ -1,0 +1,232 @@
+--[[
+*MCP Servers Tool*
+This tool can be used to call tools and resources from the MCP Servers.
+--]] local config = require("codecompanion.config")
+local xml2lua = require("codecompanion.utils.xml.xml2lua")
+---@class CodeCompanion.Tool
+local tool_schema = {
+    name = "mcp",
+    cmds = {function(self, action)
+        local hub = require("mcphub").get_hub_instance()
+        local action_name = action._attr.type
+        local server_name = action.server_name
+        local tool_name = action.tool_name
+        local uri = action.uri
+        local json_ok, arguments = pcall(vim.fn.json_decode, action.arguments or "{}")
+        if json_ok then
+            arguments = arguments or {}
+        else
+            arguments = {}
+        end
+        if action_name == "use_mcp_tool" then
+            local res, err = hub:call_tool(server_name, tool_name, arguments)
+            if err or not res then
+                return {
+                    status = "error",
+                    msg = err or "No response from call tool"
+                }
+            elseif res then
+                return {
+                    status = "success",
+                    msg = res
+                }
+            end
+        elseif action_name == "access_mcp_resource" then
+            local res, err = hub:access_resource(server_name, uri)
+            if err or not res then
+                return {
+                    status = "error",
+                    msg = err or "No response from access resource"
+                }
+            elseif res then
+                return {
+                    status = "success",
+                    msg = res
+                }
+            end
+        else
+            return {
+                status = "error",
+                msg = "Invalid action"
+            }
+        end
+    end},
+    schema = {{
+        tool = {
+            _attr = {
+                name = "mcp"
+            },
+            action = {
+                _attr = {
+                    type = "use_mcp_tool"
+                },
+                server_name = "<![CDATA[weather-server]]>",
+                tool_name = "<![CDATA[get_forecast]]>",
+                arguments = "<![CDATA[{\"city\": \"San Francisco\", \"days\": 5}]]>"
+            }
+        }
+    }, {
+        tool = {
+            _attr = {
+                name = "mcp"
+            },
+            action = {
+                _attr = {
+                    type = "access_mcp_resource"
+                },
+                server_name = "<![CDATA[weather-server]]>",
+                uri = "<![CDATA[weather://sanfrancisco/current]]>"
+            }
+        }
+    }},
+    system_prompt = function(schema)
+        -- get the running hub instance
+        local hub = require("mcphub").get_hub_instance()
+        return string.format([[### MCP Tool
+        The Model Context Protocol (MCP) enables communication between the system and locally running MCP servers that provide additional tools and resources to extend your capabilities.
+        1. **Purpose**:  Call tools and resources from the MCP Servers.
+        2. **Key Points**:
+        - Ensure XML is **valid and follows the schema**
+        - Make sure the tools xml block is **surrounded by ```xml**
+        3. **Actions**:
+
+        %s
+
+        %s
+
+        %s
+
+        ]], hub:get_use_mcp_tool_prompt(xml2lua.toXml({
+            tools = {schema[1]}
+        })), -- gets the prompt for the use_mcp_tool action
+        hub:get_access_mcp_resource_prompt(xml2lua.toXml({
+            tools = {schema[2]}
+        })), -- gets the prompt for the access_mcp_resource action
+        hub:get_active_servers_prompt() -- generates prompt from currently running mcp servers
+        )
+    end,
+    handlers = {
+        ---Approve the command to be run
+        ---@param self CodeCompanion.Tools The tool object
+        ---@param action table
+        ---@return boolean
+        approved = function(self, action)
+            local action_name = action._attr.type
+            local server_name = action.server_name
+            local tool_name = action.tool_name
+            local uri = action.uri
+            local msg = ""
+            if action_name == "use_mcp_tool" then
+                msg = string.format("Do you want to run the `%s` tool on the `%s` mcp server?", tool_name, server_name)
+            elseif action_name == "access_mcp_resource" then
+                msg = string.format("Do you want to access the resource `%s` on the `%s` server?", uri, server_name)
+            end
+            local ok, choice = pcall(vim.fn.confirm, msg, "No\nYes")
+            if not ok or choice ~= 2 then
+                return false
+            end
+            return true
+        end
+    },
+    output = {
+        rejected = function(self, action)
+            local action_name = action._attr.type
+            self.chat:add_message({
+                role = config.constants.USER_ROLE,
+                content = string.format("I've rejected the request to use the `%s` action.\n", action_name)
+            })
+        end,
+
+        error = function(self, action, stderr)
+            local action_name = action._attr.type
+            stderr = stderr or ""
+            if type(stderr) == "table" then
+                stderr = vim.inspect(stderr)
+            end
+            self.chat:add_message({
+                role = config.constants.USER_ROLE,
+                content = string.format([[ERROR: The `%s` call failed with the following error:
+                <error>
+                %s
+                </error>
+                ]], action_name, stderr)
+            }, {
+                visible = false
+            })
+
+            self.chat:add_buf_message({
+                role = config.constants.USER_ROLE,
+                content = "I've shared the error message from the `mcp` tool with you.\n"
+            })
+        end,
+
+        success = function(self, action, body)
+            local action_name = action._attr.type
+            local timestamp = body.timestamp or ""
+            local result = body.result or {}
+            local output = ""
+            -- parse tool response
+            if action_name == "use_mcp_tool" then
+                local isError = result.isError or false
+                local content = {}
+                for _, v in ipairs(result.content or {}) do
+                    local type = v.type
+                    -- TODO:handle other types
+                    if type == "text" then
+                        table.insert(content, string.format([[
+                        <text>%s</text>
+                        ]], v.text))
+                    end
+                end
+                output = string.format([[
+                <content>
+                %s
+                </content>
+                ]], table.concat(content, "\n"))
+                if isError then
+                    output = string.format('The use_mcp_tool tool run failed with error.\n%s', output)
+                end
+                output = string.format([[Here is the result of the use_mcp_tool call:
+                <result>
+                %s
+                </result>
+                ]], output)
+            elseif action_name == "access_mcp_resource" then
+                local contents = {}
+                for _, v in ipairs(result.contents or {}) do
+                    local uri = v.uri or ""
+                    local text = v.text or ""
+                    local mimeType = v.mimeType or ""
+                    table.insert(contents, string.format([[
+                    <resource>
+                    <uri>%s</uri>
+                    <text>%s</text>
+                    </resource>
+                    ]], uri, text))
+                end
+                output = string.format([[
+                <contents>
+                %s
+                </contents>
+                ]], table.concat(contents, "\n"))
+                output = string.format([[Here is the result of the access_mcp_resource call:
+                <result>
+                %s
+                </result>
+                ]], output)
+            end
+            self.chat:add_message({
+                role = config.constants.USER_ROLE,
+                content = output
+            }, {
+                visible = false
+            })
+            self.chat:add_buf_message({
+                role = config.constants.USER_ROLE,
+                content = string.format("I've shared the result of the `mcp` tool with you.\n")
+            })
+        end
+    }
+}
+
+return tool_schema
