@@ -4,6 +4,7 @@ local Text = require("mcphub.utils.text")
 local NuiLine = require("mcphub.utils.nuiline")
 local highlights = require("mcphub.utils.highlights").groups
 local Handlers = require("mcphub.utils.handlers")
+local log = require("mcphub.utils.log")
 
 ---@class ToolHandler : CapabilityHandler
 ---@field super CapabilityHandler
@@ -98,15 +99,19 @@ function ToolHandler:validate_all_params()
     local params = self:get_ordered_params()
 
     for _, param in ipairs(params) do
-        if param.required and (not self.state.params.values[param.name] or self.state.params.values[param.name] == "") then
+        local value = self.state.params.values[param.name]
+
+        -- Check required fields
+        if param.required and (not value or value == "") then
             errors[param.name] = "Required parameter"
-        elseif self.state.params.values[param.name] and self.state.params.values[param.name] ~= "" then
-            -- Also validate the value if present
-            local ok, err = self:validate_param(param.name, self.state.params.values[param.name])
+            -- Only validate non-empty values
+        elseif value and value ~= "" then
+            local ok, err = self:validate_param(param.name, value)
             if not ok then
                 errors[param.name] = err
             end
         end
+        -- Skip validation for empty optional fields
     end
 
     if next(errors) then
@@ -125,15 +130,28 @@ function ToolHandler:handle_input_action(param_name)
 
     self:handle_input(string.format("%s (%s): ", param_name, self:format_param_type(param_schema)),
         self.state.params.values[param_name], function(input)
-            -- Validate input
-            local ok, err = self:validate_param(param_name, input)
-            if not ok then
-                self.state.params.errors[param_name] = err
+            -- Clear previous error
+            self.state.params.errors[param_name] = nil
+
+            -- Handle empty input
+            if input == "" then
+                -- Check if field is required
+                local is_required = vim.tbl_contains(self.info.inputSchema.required or {}, param_name)
+                if is_required then
+                    self.state.params.errors[param_name] = "Required parameter"
+                else
+                    -- For optional fields, clear value and error
+                    self.state.params.values[param_name] = nil
+                end
             else
-                -- Update value
-                self.state.params.values[param_name] = input
-                -- Clear any previous error
-                self.state.params.errors[param_name] = nil
+                -- Only validate non-empty input
+                local ok, err = self:validate_param(param_name, input)
+                if not ok then
+                    self.state.params.errors[param_name] = err
+                else
+                    -- Update value
+                    self.state.params.values[param_name] = input
+                end
             end
             self.view:draw()
         end)
@@ -162,9 +180,9 @@ function ToolHandler:execute()
 
     -- Validate all parameters first
     local ok, err, errors = self:validate_all_params()
+    self.state.params.errors = errors
+    self.state.error = err
     if not ok then
-        self.state.params.errors = errors
-        self.state.error = err
         self.view:draw()
         return
     end
@@ -180,6 +198,7 @@ function ToolHandler:execute()
         converted_values[name] = self:convert_param(name, value)
     end
 
+    log.debug(string.format("Executing tool %s with parameters: %s", self.info.name, vim.inspect(converted_values)))
     -- Execute tool
     if State.hub_instance then
         State.hub_instance:call_tool(self.server_name, self.info.name, converted_values, {
