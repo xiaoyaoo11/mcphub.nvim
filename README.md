@@ -184,7 +184,7 @@ MCPHub.nvim provides extensions that integrate with popular Neovim chat plugins.
   }
   ```
 
-See the [extensions/](extensions/) folder for more examples and implementation details.
+See the [extensions/](lua/mcphub/extensions/) folder for more examples and implementation details.
 
 Note: You can also access the Express server directly at http://localhost:[port]/api
 
