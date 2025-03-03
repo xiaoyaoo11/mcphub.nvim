@@ -14,6 +14,13 @@ A powerful Neovim plugin that integrates MCP (Model Context Protocol) servers in
 </p>
 </div>
 
+<div align="center">
+<p>
+<h3>Using <a href="https://github.com/olimorris/codecompanion.nvim">Codecompanion Chat</a> plugin</h3>
+<video controls muted src="https://github.com/user-attachments/assets/cefce4bb-d07f-4423-8873-cf7d56656cd3"></video>
+</p>
+</div>
+
 ## ✨ Features
 
 - Simple single-command interface (`:MCPHub`)
@@ -57,6 +64,27 @@ Using [lazy.nvim](https://github.com/folke/lazy.nvim):
             },
         })
     end
+}
+```
+
+Example configuration file:
+
+```json
+{
+  "mcpServers": {
+    "fetch": {
+      "command": "uvx",
+      "args": ["mcp-server-fetch"]
+    },
+    "todoist": {
+      "command": "npx",
+      "args": ["-y", "@abhiz123/todoist-mcp-server"],
+      "disabled": true,
+      "env": {
+        "TODOIST_API_TOKEN": "your-api-token-here"
+      }
+    }
+  }
 }
 ```
 
@@ -247,6 +275,15 @@ This architecture ensures:
 ![Cleanup Flow](https://github.com/user-attachments/assets/0ccec454-6d0c-4460-9b2d-0e597bab2ae9)
 
 ![API Flow](https://github.com/user-attachments/assets/5b3fb3d2-aa37-499f-badd-b4cfc1c59e71)
+
+## 🚧 TODO
+
+Currently working on the following features:
+
+- Enable/disable MCP servers directly from the hub UI
+- Enable/disable specific tools within a server
+- Add custom descriptions for each MCP server through the UI
+- Configure server settings via server interface or config file
 
 ## 👏 Acknowledgements
 
