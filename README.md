@@ -290,13 +290,94 @@ This architecture ensures:
 
 ### Architecture Flows
 
-![Server Lifecycle](https://github.com/user-attachments/assets/a26422fe-ba98-4cfc-9cbe-9e3867e1625f)
+```mermaid
+sequenceDiagram
+    participant N1 as First Neovim
+    participant N2 as Other Neovims
+    participant S as MCP Hub Server
 
-![Request Flow](https://github.com/user-attachments/assets/319f203f-615b-4de0-846f-fd444498770c)
+    Note over N1,S: First Client Connection
+    N1->>S: Check if Running
+    activate S
+    S-->>N1: Not Running
+    N1->>S: start_hub()
+    Note over S: Server Start
+    S-->>N1: Ready Signal
+    N1->>S: Register Client
+    S-->>N1: Registration OK
 
-![Cleanup Flow](https://github.com/user-attachments/assets/0ccec454-6d0c-4460-9b2d-0e597bab2ae9)
+    Note over N2,S: Other Clients
+    N2->>S: Check if Running
+    S-->>N2: Running
+    N2->>S: Register Client
+    S-->>N2: Registration OK
 
-![API Flow](https://github.com/user-attachments/assets/5b3fb3d2-aa37-499f-badd-b4cfc1c59e71)
+    Note over N1,S: Server stays active
+
+    Note over N2,S: Client Disconnection
+    N2->>S: Unregister Client
+    S-->>N2: OK
+    Note over S: Keep Running
+
+    Note over N1,S: Last Client Exit
+    N1->>S: Unregister Client
+    S-->>N1: OK
+    Note over S: Grace Period
+    Note over S: Auto Shutdown
+    deactivate S
+```
+
+```mermaid
+sequenceDiagram
+    participant N as Neovim
+    participant P as Plugin
+    participant S as MCP Hub Server
+    N->>P: start_hub()
+    P->>S: Health Check
+    alt Server Not Running
+        P->>S: Start Server
+        S-->>P: Ready Signal
+    end
+    P->>S: Register Client
+    S-->>P: Registration OK
+    N->>P: :MCPHub
+    P->>S: Get Status
+    S-->>P: Server Status
+    P->>N: Display UI
+```
+
+```mermaid
+flowchart LR
+    A[VimLeavePre] -->|Trigger| B[Stop Hub]
+    B -->|If Ready| C[Unregister Client]
+    C -->|Last Client| D[Server Auto-shutdown]
+    C -->|Other Clients| E[Server Continues]
+    B --> F[Clear State]
+    F --> G[Ready = false]
+    F --> H[Owner = false]
+```
+
+```mermaid
+sequenceDiagram
+    participant C as Chat Plugin
+    participant H as Hub Instance
+    participant S as MCP Server
+    C->>H: call_tool()
+    H->>H: Check Ready
+    alt Not Ready
+        H-->>C: Error: Not Ready
+    end
+    H->>S: POST /tools
+    S-->>H: Tool Result
+    H-->>C: Return Result
+    Note over C,S: Similar flow for resources
+
+    C->>H: access_resource()
+    H->>H: Check Ready
+    H->>S: POST /resources
+    S-->>H: Resource Data
+    H-->>C: Return Data
+```
 
 ## 🚧 TODO
 
