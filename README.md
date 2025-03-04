@@ -186,18 +186,19 @@ MCPHub.nvim provides extensions that integrate with popular Neovim chat plugins.
 },
 ```
 
+- Please note there are some breaking changes with codecompanion v13 in the way we configure tools.
+
 ```lua
   require("codecompanion").setup({
     strategies = {
         chat = {
-            agents = {
-                tools = {
-                    ["mcp"] = {
-                        callback = require("mcphub.extensions.codecompanion"),
-                        description = "Call tools and resources from the MCP Servers",
-                        opts = {
-                            user_approval = true
-                        }
+            tools = {
+                ["mcp"] = {
+                    callback = require("mcphub.extensions.codecompanion"),
+                    description = "Call tools and resources from the MCP Servers",
+                    opts = {
+                      -- user_approval = true,
+                      requires_approval = true,
                     }
                 }
             }
@@ -290,6 +291,8 @@ This architecture ensures:
 
 ### Architecture Flows
 
+##### Server Lifecycle
+
 ```mermaid
 sequenceDiagram
     participant N1 as First Neovim
@@ -327,6 +330,8 @@ sequenceDiagram
     deactivate S
 ```
 
+##### Request flow
+
 ```mermaid
 sequenceDiagram
     participant N as Neovim
@@ -346,6 +351,8 @@ sequenceDiagram
     P->>N: Display UI
 ```
 
+##### Cleanup flow
+
 ```mermaid
 flowchart LR
     A[VimLeavePre] -->|Trigger| B[Stop Hub]
@@ -356,6 +363,8 @@ flowchart LR
     F --> G[Ready = false]
     F --> H[Owner = false]
 ```
+
+##### API Flow
 
 ```mermaid
 sequenceDiagram
