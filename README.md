@@ -173,15 +173,23 @@ MCPHub.nvim provides extensions that integrate with popular Neovim chat plugins.
 
 - **[CodeCompanion](https://github.com/olimorris/codecompanion.nvim) Integration**: Add MCP capabilities to CodeCompanion
   ```lua
-  tools = {
-    ["mcp"] = {
-      callback = require("mcphub.extensions.codecompanion"),
-      description = "Call tools and resources from the MCP Servers",
-      opts = {
-        user_approval = true,
-      },
-    },
-  }
+  require("codecompanion").setup({
+    strategies = {
+        chat = {
+            agents = {
+                tools = {
+                    ["mcp"] = {
+                        callback = require("mcphub.extensions.codecompanion"),
+                        description = "Call tools and resources from the MCP Servers",
+                        opts = {
+                            user_approval = true
+                        }
+                    }
+                }
+            }
+        }
+    }
+  })
   ```
 
 See the [extensions/](lua/mcphub/extensions/) folder for more examples and implementation details.
