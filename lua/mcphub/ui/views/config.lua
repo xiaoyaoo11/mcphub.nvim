@@ -73,10 +73,10 @@ function ConfigView:render()
         table.insert(lines, Text.empty_line())
     end
 
-    if file_validation.content then
+    if file_validation.json then
         -- Show file content
-        vim.list_extend(lines,
-            vim.tbl_map(Text.pad_line, Text.multiline(file_validation.content, Text.highlights.muted)))
+        vim.list_extend(lines, vim.tbl_map(Text.pad_line,
+            Text.multiline(vim.inspect(file_validation.json), Text.highlights.muted)))
     end
     return lines
 end

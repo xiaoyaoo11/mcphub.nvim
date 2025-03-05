@@ -18,6 +18,9 @@ end
 ---@return NuiText|NuiLine
 function Line:append(content, highlight)
     local block = content
+    if (block == nil) then
+        return self
+    end
     if type(block) == "string" then
         block = NuiText(block, highlight)
     end

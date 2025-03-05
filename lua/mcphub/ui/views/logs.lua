@@ -38,7 +38,8 @@ end
 -- Render server output section
 function LogsView:render_server_output()
     local lines = {}
-    table.insert(lines, Text.section("MCP Hub Logs ", {}, true)[1])
+    table.insert(lines, Text.pad_line(" MCP Hub Logs ", Text.highlights.header))
+    table.insert(lines, Text.pad_line(""))
     vim.list_extend(lines, renderer.render_server_entries(State.server_output.entries))
     return lines
 end

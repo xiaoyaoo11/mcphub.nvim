@@ -61,10 +61,6 @@ function HelpView:render_navigation()
         name = "Home",
         desc = "Server status and overview"
     }, {
-        key = "S",
-        name = "Servers",
-        desc = "Test tools and resources interactively"
-    }, {
         key = "C",
         name = "Config",
         desc = "Server configuration"
@@ -99,7 +95,6 @@ function HelpView:render_capabilities()
 
     local capabilities_text = [[
 Testing Tools and Resources:
-• In Servers view (press 'S'), browse available capabilities
 • Select a tool/resource and press <CR> to interact
 • Enter parameters for tools when prompted
 • View raw or parsed responses

@@ -11,6 +11,7 @@ local State = {
 
     -- config
     config = {},
+    servers_config = {},
 
     -- Core instances
     hub_instance = nil,

@@ -82,6 +82,31 @@ function M.validate_config_file(path)
         }
     end
 
+    -- Validate disabled_tools for each server
+    for server_name, server_config in pairs(json.mcpServers) do
+        if server_config.disabled_tools ~= nil then
+            if type(server_config.disabled_tools) ~= "table" then
+                return {
+                    ok = false,
+                    content = content,
+                    error = Error("SETUP", Error.Types.SETUP.INVALID_CONFIG,
+                        string.format("disabled_tools must be an array in server %s", server_name))
+                }
+            end
+            -- Validate each tool name is a string
+            for _, tool_name in ipairs(server_config.disabled_tools) do
+                if type(tool_name) ~= "string" or tool_name == "" then
+                    return {
+                        ok = false,
+                        content = content,
+                        error = Error("SETUP", Error.Types.SETUP.INVALID_CONFIG, string.format(
+                            "disabled_tools must contain non-empty strings in server %s", server_name))
+                    }
+                end
+            end
+        end
+    end
+
     return {
         ok = true,
         json = json,

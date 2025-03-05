@@ -51,6 +51,27 @@ M.TypeHandlers = {
             return "boolean"
         end
     },
+    object = {
+        validate = function(value, schema)
+            -- Parse JSON object string and validate each property
+            -- FIXME: need to implement proper validation for objects
+            local ok, obj = pcall(vim.fn.json_decode, value)
+            if not ok or type(obj) ~= "table" then
+                return false
+            end
+            return true
+        end,
+        format = function(schema)
+            if schema.properties then
+                local props = {}
+                for k, v in pairs(schema.properties) do
+                    table.insert(props, string.format("%s: %s", k, M.TypeHandlers[v.type].format(v)))
+                end
+                return string.format("{%s}", table.concat(props, ", "))
+            end
+            return "object"
+        end
+    },
     array = {
         validate = function(value, schema)
             -- Parse JSON array string and validate each item
@@ -70,7 +91,7 @@ M.TypeHandlers = {
             if schema.items and schema.items.type then
                 local item_validator = M.TypeHandlers[schema.items.type].validate
                 for _, item in ipairs(arr) do
-                    if not item_validator(item) then
+                    if not item_validator(item, schema.items) then
                         return false
                     end
                 end
@@ -87,7 +108,7 @@ M.TypeHandlers = {
                         return string.format("%q", v)
                     end, schema.items.enum), ", "))
                 elseif schema.items.type then
-                    return string.format("%s[]", M.TypeHandlers[schema.items.type].format())
+                    return string.format("%s[]", M.TypeHandlers[schema.items.type].format(schema.items))
                 end
             end
             return "array"
@@ -211,7 +232,7 @@ M.ResponseHandlers = {
             local error_msg = ({
                 [7] = "Connection refused - Server not running",
                 [28] = "Request timed out"
-            })[response.exit] or string.format("Request failed (code %d)", response.exit)
+            })[response.exit] or string.format("Request failed (code %d)", response.exit or 0)
 
             return Error("SERVER", error_code, error_msg, vim.tbl_extend("force", context, {
                 exit_code = response.exit

@@ -5,6 +5,7 @@ local prompt_utils = require("mcphub.utils.prompt")
 local handlers = require("mcphub.utils.handlers")
 local State = require("mcphub.state")
 local Error = require("mcphub.errors")
+local validation = require("mcphub.validation")
 
 -- Default timeouts
 local QUICK_TIMEOUT = 1000 -- 1s for quick operations like health checks
@@ -226,19 +227,88 @@ function MCPHub:get_health(opts)
     return self:api_request("GET", "health", opts)
 end
 
---- Get available servers
---- @param opts? { callback?: function } Optional callback(response: table|nil, error?: string)
---- @return table|nil, string|nil If no callback is provided, returns response and error
-function MCPHub:get_servers(opts)
-    return self:api_request("GET", "servers", opts)
-end
-
 --- Get server information if available
 --- @param name string Server name
 --- @param opts? { callback?: function } Optional callback(response: table|nil, error?: string)
 --- @return table|nil, string|nil If no callback is provided, returns response and error
 function MCPHub:get_server_info(name, opts)
     return self:api_request("GET", string.format("servers/%s/info", name), opts)
+end
+
+--- Start a disabled/disconnected MCP server
+---@param name string Server name to start
+---@param opts? { callback?: function } Optional callback(response: table|nil, error?: string)
+---@return table|nil, string|nil If no callback is provided, returns response and error
+function MCPHub:start_mcp_server(name, opts)
+    opts = opts or {}
+
+    -- First update state to show connecting
+    if self:is_ready() then
+        for i, server in ipairs(State.server_state.servers) do
+            if server.name == name then
+                State.server_state.servers[i].status = "connecting"
+                break
+            end
+        end
+        State:notify_subscribers({
+            server_state = true
+        }, "server")
+    end
+
+    self:update_server_config(name, {
+        disabled = false
+    })
+    -- Call start endpoint
+    return self:api_request("POST", string.format("servers/%s/start", name), {
+        callback = function(response, err)
+            if not err then
+                self:refresh()
+            end
+            if opts.callback then
+                opts.callback(response, err)
+            end
+        end
+    })
+end
+
+--- Stop an MCP server
+---@param name string Server name to stop
+---@param disable boolean Whether to disable the server
+---@param opts? { callback?: function } Optional callback(response: table|nil, error?: string)
+---@return table|nil, string|nil If no callback is provided, returns response and error
+function MCPHub:stop_mcp_server(name, disable, opts)
+    opts = opts or {}
+
+    -- First update state to show disconnecting
+    if self:is_ready() then
+        for i, server in ipairs(State.server_state.servers) do
+            if server.name == name then
+                State.server_state.servers[i].status = "disconnecting"
+                break
+            end
+        end
+        State:notify_subscribers({
+            server_state = true
+        }, "server")
+    end
+
+    self:update_server_config(name, {
+        disabled = disable or false
+    })
+    -- Call stop endpoint
+    return self:api_request("POST", string.format("servers/%s/stop", name), {
+        query = disable and {
+            disable = "true"
+        } or nil,
+        callback = function(response, err)
+            if not err then
+                self:refresh()
+            end
+            if opts.callback then
+                opts.callback(response, err)
+            end
+        end
+    })
 end
 
 --- Call a tool on a server
@@ -311,15 +381,25 @@ end
 --- API request helper
 --- @param method string HTTP method
 --- @param path string API path
---- @param opts? { body?: table, timeout?: number, skip_ready_check?: boolean, callback?: function }
+--- @param opts? { body?: table, timeout?: number, skip_ready_check?: boolean, callback?: function, query?: table }
 --- @return table|nil, string|nil If no callback is provided, returns response and error
 function MCPHub:api_request(method, path, opts)
     opts = opts or {}
     local callback = opts.callback
 
+    -- Build URL with query parameters if any
+    local url = string.format("http://localhost:%d/api/%s", self.port, path)
+    if opts.query then
+        local params = {}
+        for k, v in pairs(opts.query) do
+            table.insert(params, k .. "=" .. v)
+        end
+        url = url .. "?" .. table.concat(params, "&")
+    end
+
     -- Prepare request options
     local request_opts = {
-        url = string.format("http://localhost:%d/api/%s", self.port, path),
+        url = url,
         method = method,
         timeout = opts.timeout or QUICK_TIMEOUT,
         headers = {
@@ -410,8 +490,92 @@ function MCPHub:api_request(method, path, opts)
     end
 end
 
---- Stop the MCP Hub server
---- Stops the server if we own it, otherwise just disconnects
+--- Update server configuration in the MCP config file
+---@param server_name string Name of the server to update
+---@param updates table Key-value pairs to update in the server config (command, args, env, disabled)
+---@return boolean, string|nil Returns success status and error message if any
+--- Load and validate config file
+---@private
+function MCPHub:load_config()
+    -- Validate and read current config
+    local result = validation.validate_config_file(self.config)
+    if not result.ok then
+        return false, tostring(result.error)
+    end
+
+    return result
+end
+
+--- Update server configuration in the MCP config file
+---@param server_name string Name of the server to update
+---@param updates table Key-value pairs to update in the server config
+---@return boolean, string|nil Returns success status and error message if any
+function MCPHub:update_server_config(server_name, updates)
+    -- Load and validate current config
+    local result = self:load_config()
+    if not result.ok then
+        return false, tostring(result.error)
+    end
+
+    local config = result.json
+    -- Ensure mcpServers exists
+    config.mcpServers = config.mcpServers or {}
+
+    -- Update or create server config
+    config.mcpServers[server_name] = vim.tbl_deep_extend("force", config.mcpServers[server_name] or {}, updates)
+
+    -- Write updated config back to file
+    local json_str = vim.json.encode(config)
+    local file = io.open(self.config, "w")
+    if not file then
+        return false, "Failed to open config file for writing"
+    end
+
+    file:write(json_str)
+    file:close()
+
+    -- Update State
+    State:update({
+        servers_config = config.mcpServers
+    }, "setup")
+
+    return true
+end
+
+--- Update tool configuration for a server
+---@param server_name string Name of the server
+---@param tool_name string Name of the tool
+---@param disable boolean Whether to disable the tool
+---@return boolean, string|nil Returns success status and error message if any
+function MCPHub:update_tool_config(server_name, tool_name, disable)
+    -- Get current config for the server
+    local result = self:load_config()
+    if not result.ok then
+        return false, tostring(result.error)
+    end
+
+    local server_config = result.json.mcpServers[server_name] or {}
+    local disabled_tools = server_config.disabled_tools or {}
+    local is_disabled = vim.tbl_contains(disabled_tools, tool_name)
+
+    -- Update disabled_tools list based on desired state
+    if disable and not is_disabled then
+        table.insert(disabled_tools, tool_name)
+    elseif not disable and is_disabled then
+        for i, name in ipairs(disabled_tools) do
+            if name == tool_name then
+                table.remove(disabled_tools, i)
+                break
+            end
+        end
+    end
+
+    -- Update server config using existing function
+    return self:update_server_config(server_name, {
+        disabled_tools = disabled_tools
+    })
+end
+
 function MCPHub:stop()
     self.is_shutting_down = true
 
@@ -492,11 +656,37 @@ function MCPHub:ensure_ready()
     return true
 end
 
+--- Get servers with their tools filtered based on server config
+---@return table[] Array of connected servers with disabled tools filtered out
+function MCPHub:get_servers()
+    if not self:ensure_ready() then
+        return {}
+    end
+    local filtered_servers = {}
+    for _, server in ipairs(State.server_state.servers or {}) do
+        if server.status == "connected" then
+            local server_config = State.servers_config[server.name] or {}
+            local disabled_tools = server_config.disabled_tools or {}
+
+            -- Create a copy of the server with filtered tools
+            local filtered_server = vim.deepcopy(server)
+            if filtered_server.capabilities and filtered_server.capabilities.tools then
+                -- Filter out disabled tools
+                filtered_server.capabilities.tools = vim.tbl_filter(function(tool)
+                    return not vim.tbl_contains(disabled_tools, tool.name)
+                end, filtered_server.capabilities.tools)
+            end
+            table.insert(filtered_servers, filtered_server)
+        end
+    end
+    return filtered_servers
+end
+
 function MCPHub:get_active_servers_prompt()
     if not self:ensure_ready() then
         return ""
     end
-    return prompt_utils.get_active_servers_prompt(State.server_state.servers or {})
+    return prompt_utils.get_active_servers_prompt(self:get_servers())
 end
 
 function MCPHub:get_use_mcp_tool_prompt(opts)
@@ -526,7 +716,7 @@ function MCPHub:get_prompts(opts)
     end
     opts = opts or {}
     return {
-        active_servers = prompt_utils.get_active_servers_prompt(State.server_state.servers or {}),
+        active_servers = self:get_active_servers_prompt(),
         use_mcp_tool = prompt_utils.get_use_mcp_tool_prompt(opts.use_mcp_tool_example),
         access_mcp_resource = prompt_utils.get_access_mcp_resource_prompt(opts.access_mcp_resource_example)
     }

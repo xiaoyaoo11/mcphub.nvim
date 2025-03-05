@@ -81,6 +81,12 @@ function M.setup(opts)
         return nil
     end
 
+    -- Update servers config in state
+    local file_result = validation.validate_config_file(config.config)
+    if file_result.ok and file_result.json then
+        State.servers_config = file_result.json.mcpServers
+    end
+
     -- Setup cleanup
     local group = vim.api.nvim_create_augroup("mcphub_cleanup", {
         clear = true

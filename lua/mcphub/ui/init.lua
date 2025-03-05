@@ -87,7 +87,6 @@ function UI:init_views()
     -- Create view instances
     self.views = {
         main = MainView:new(self),
-        servers = require("mcphub.ui.views.servers"):new(self),
         logs = require("mcphub.ui.views.logs"):new(self),
         help = require("mcphub.ui.views.help"):new(self),
         config = require("mcphub.ui.views.config"):new(self)
@@ -164,10 +163,6 @@ function UI:setup_keymaps()
     map("H", function()
         self:switch_view("main")
     end, "Switch to Home view")
-
-    map("S", function()
-        self:switch_view("servers")
-    end, "Switch to Servers view")
 
     map("C", function()
         self:switch_view("config")
