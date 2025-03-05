@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2025-03-05
+
+### Added
+
+- Persistent server and tool toggling state in config file
+- Parallel startup of MCP servers for improved performance
+- Enhanced Hub view with integrated server management capabilities
+  - Start/stop servers directly from Hub view
+  - Enable/disable individual tools per server
+  - Server state persists across restarts
+- Improved UI rendering with better layout and visual feedback
+- Validation support for server configuration and tool states
+
+### Changed
+
+- Consolidated Servers view functionality into Hub view
+- Improved startup performance through parallel server initialization
+- Enhanced UI responsiveness and visual feedback
+- Updated internal architecture for better state management
+- More intuitive server and tool management interface
+
+### Removed
+
+- Standalone Servers view (functionality moved to Hub view)
+
 ## [1.3.0] - 2025-03-02
 
 ### Added

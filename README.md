@@ -24,6 +24,12 @@ A powerful Neovim plugin that integrates MCP (Model Context Protocol) servers in
 ## ✨ Features
 
 - Simple single-command interface (`:MCPHub`)
+- Integrated Hub view for managing servers and tools
+  - Dynamically enable/disable servers and tools to optimize token usage
+  - Start/stop servers with persistent state
+  - Enable/disable specific tools per server
+  - State persists across restarts
+- Parallel startup for improved performance
 - Interactive UI for testing tools and resources
 - Automatic server lifecycle management across multiple Neovim instances
 - Smart shutdown handling with configurable delay
@@ -97,11 +103,18 @@ Example configuration file:
 
 ## 🚀 Usage
 
-1. Open the MCPHub UI to test tools and monitor server status:
+1. Open the MCPHub UI to manage servers, test tools and monitor status:
 
 ```vim
 :MCPHub
 ```
+
+You can:
+
+- Start/stop servers directly from the Hub view
+- Enable/disable specific tools for each server
+- Test tools and resources interactively
+- Monitor server status and logs
 
 2. Use the hub instance in your code:
 
@@ -388,14 +401,12 @@ sequenceDiagram
     H-->>C: Return Data
 ```
 
-## 🚧 TODO
+## 🚧 Future Enhancements
 
-Currently working on the following features:
+Currently planning these features:
 
-- Enable/disable MCP servers directly from the hub UI
-- Enable/disable specific tools within a server
 - Add custom descriptions for each MCP server through the UI
-- Configure server settings via server interface or config file
+- Support server-specific configuration through the interface
 
 ## 👏 Acknowledgements
 
