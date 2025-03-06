@@ -44,4 +44,41 @@ function M.format_uptime(seconds)
     end
 end
 
+--- Calculate the approximate number of tokens in a text string
+--- This is a simple approximation using word count, which works reasonably well for most cases
+---@param text string The text to count tokens from
+---@return number approx_tokens The approximate number of tokens
+function M.calculate_tokens(text)
+    if not text or text == "" then
+        return 0
+    end
+
+    -- Simple tokenization approximation (4 chars ≈ 1 token)
+    local char_count = #text
+    local approx_tokens = math.ceil(char_count / 4)
+
+    -- Alternative method using word count
+    -- local words = {}
+    -- for word in text:gmatch("%S+") do
+    --     table.insert(words, word)
+    -- end
+    -- local word_count = #words
+    -- local approx_tokens = math.ceil(word_count * 1.3) -- Words + punctuation overhead
+
+    return approx_tokens
+end
+
+--- Format token count for display
+---@param count number The token count
+---@return string formatted The formatted token count
+function M.format_token_count(count)
+    if count < 1000 then
+        return tostring(count)
+    elseif count < 1000000 then
+        return string.format("%.1fk", count / 1000)
+    else
+        return string.format("%.1fM", count / 1000000)
+    end
+end
+
 return M

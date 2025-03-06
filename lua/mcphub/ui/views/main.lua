@@ -254,7 +254,7 @@ function MainView:render_hub_status()
         status_line:append(" " .. utils.format_relative_time(State.server_state.started_at), Text.highlights.muted)
     end
     table.insert(lines, Text.pad_line(status_line))
-
+    table.insert(lines, self:divider())
     if State.server_state.status ~= "connected" then
         vim.list_extend(lines, renderer.render_server_entries(State.server_output.entries, false))
     end
@@ -373,9 +373,30 @@ function MainView:render_servers(line_offset)
         return lines
     end
 
-    -- Section header
-    table.insert(lines, Text.pad_line("MCP Servers ", Text.highlights.title))
+    -- Section header with token information
+    local header_line = NuiLine():append("MCP Servers", Text.highlights.title)
+
+    -- Add token count if connected
+    if State.server_state.status == "connected" and State.hub_instance and State.hub_instance:is_ready() then
+        local prompts = State.hub_instance:get_prompts()
+        if prompts then
+            -- Calculate total tokens from all prompts
+            local active_servers_tokens = utils.calculate_tokens(prompts.active_servers or "")
+            local use_mcp_tool_tokens = utils.calculate_tokens(prompts.use_mcp_tool or "")
+            local access_mcp_resource_tokens = utils.calculate_tokens(prompts.access_mcp_resource or "")
+            local total_tokens = active_servers_tokens + use_mcp_tool_tokens + access_mcp_resource_tokens
+
+            if total_tokens > 0 then
+                header_line:append(" (~ " .. utils.format_token_count(total_tokens) .. " tokens)", Text.highlights.muted)
+            end
+        end
+    end
+
+    table.insert(lines, Text.pad_line(header_line))
     current_line = current_line + 1
+    table.insert(lines, self:divider())
+    current_line = current_line + 1
+
     -- Sort servers (enabled first)
     local sorted_servers = sort_servers(vim.deepcopy(State.server_state.servers))
 
@@ -486,7 +507,7 @@ function MainView:render()
         return View.render(self)
     end
     -- Get base header
-    local lines = self:render_header()
+    local lines = self:render_header(false)
     if State.server_state.status ~= "connected" then
         -- Server status section
         vim.list_extend(lines, self:render_hub_status())
