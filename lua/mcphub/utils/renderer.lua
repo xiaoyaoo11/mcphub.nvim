@@ -41,6 +41,11 @@ function M.render_server_line(server)
     local line = NuiLine():append(status.icon, status.hl):append(server.name, server.status == "connected" and
         Text.highlights.success or status.hl)
 
+    -- Add error message for disconnected servers
+    if server.error ~= vim.NIL and server.error ~= "" then
+        line:append(" - ", Text.highlights.muted):append(server.error, Text.highlights.error)
+    end
+
     -- Add capabilities counts inline for connected servers
     if server.status == "connected" and server.capabilities then
         if #server.capabilities.tools > 0 then

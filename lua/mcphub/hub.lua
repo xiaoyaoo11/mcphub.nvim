@@ -408,10 +408,7 @@ function MCPHub:api_request(method, path, opts)
         },
         on_error = vim.schedule_wrap(function(err)
             log.debug(string.format("Error while making request to %s: %s", path, vim.inspect(err)))
-            local error = handlers.ResponseHandlers.process_error(err, {
-                code = "NETWORK_ERROR",
-                request = request_opts
-            })
+            local error = handlers.ResponseHandlers.process_error(err)
             if not self:is_ready() and path == "health" then
                 callback(nil, tostring(error))
             else

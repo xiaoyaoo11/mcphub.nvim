@@ -262,19 +262,24 @@ function MainView:render_hub_status()
     return lines
 end
 
---- Sort servers by status (enabled first, disabled last) and alphabetically within each group
+--- Sort servers by status (connected first, then disconnected, disabled last) and alphabetically within each group
 ---@param servers table[] List of servers to sort
 local function sort_servers(servers)
     table.sort(servers, function(a, b)
-        if a.status == "disabled" and b.status == "disabled" then
-            return a.name < b.name
+        -- First compare status priority
+        local status_priority = {
+            connected = 1,
+            disconnected = 2,
+            disabled = 3
+        }
+        local a_priority = status_priority[a.status] or 2 -- default to disconnected priority
+        local b_priority = status_priority[b.status] or 2
+
+        if a_priority ~= b_priority then
+            return a_priority < b_priority
         end
-        if a.status == "disabled" then
-            return false
-        end
-        if b.status == "disabled" then
-            return true
-        end
+
+        -- If same status, sort alphabetically
         return a.name < b.name
     end)
     return servers
@@ -404,13 +409,21 @@ function MainView:render_servers(line_offset)
         local server_name_line = renderer.render_server_line(server)
         table.insert(lines, Text.pad_line(server_name_line, nil, 3))
         current_line = current_line + 1
-        -- Track server line
+        -- Prepare hover hint based on server status
+        local hint
+        if server.status == "disabled" then
+            hint = "Press 't' to enable server"
+        elseif server.status == "disconnected" then
+            hint = "Press 't' to disable server"
+        else
+            hint = self.expanded_server == server.name and "Press <CR> to collapse" or
+                       "Press <CR> to expand, 't' to disable"
+        end
+
         self:track_line(current_line, "server", {
             name = server.name,
             status = server.status,
-            hint = server.status == "disabled" and "Press 't' to enable server" or
-                (self.expanded_server == server.name and "Press <CR> to collapse" or
-                    "Press <CR> to expand, 't' to disable")
+            hint = hint
         })
 
         -- Show expanded server capabilities
