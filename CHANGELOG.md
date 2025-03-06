@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2025-03-06
+
+### Added
+
+- Enhanced logs view with tabbed interface for better organization
+- Token count display in MCP Servers header with calculation utilities
+- Improved error messaging and display system
+
+### Changed
+
+- Fixed JSON formatting while saving to config files
+- Improved server status handling and error display
+- Enhanced UI components and visual feedback
+- Updated required mcp-hub version to 1.5.0
+
 ## [2.0.0] - 2025-03-05
 
 ### Added

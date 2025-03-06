@@ -405,6 +405,9 @@ sequenceDiagram
 
 Currently planning these features:
 
+- Workflow integration with CodeCompanion for enhanced code assistance
+- Enhanced help view with comprehensive documentation
+- Community marketplace for sharing and discovering MCP servers
 - Add custom descriptions for each MCP server through the UI
 - Support server-specific configuration through the interface
 
