@@ -168,7 +168,7 @@ M.ProcessHandlers = {
         local error_obj = Error("SERVER", parsed.code or Error.Types.SERVER.CONNECTION, parsed.message,
           parsed.data)
         State:add_error(error_obj)
-        log.error(tostring(error_obj))
+        -- log.error(tostring(error_obj))
         hub:handle_server_error(tostring(error_obj), opts)
         return true
       end

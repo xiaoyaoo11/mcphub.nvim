@@ -6,6 +6,7 @@ M.groups = {
     header = "MCPHubHeader",
     header_btn = "MCPHubHeaderBtn",
     header_btn_shortcut = "MCPHubHeaderBtnShortcut",
+    header_accent = "MCPHubHeaderAccent",
     header_shortcut = "MCPHubHeaderShortcut",
     keymap = "MCPHubKeymap",
     error = "MCPHubError",
@@ -47,6 +48,11 @@ function M.setup()
         [M.groups.header_btn] = {
             fg = "#222222",
             bg = "#c792ea",
+            bold = true
+        },
+        [M.groups.header_accent] = {
+            bg = "#333333",
+            fg = "#c792ea", -- Purple for accents
             bold = true
         },
         [M.groups.header_btn_shortcut] = {

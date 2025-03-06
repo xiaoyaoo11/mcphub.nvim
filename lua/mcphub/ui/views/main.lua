@@ -61,7 +61,7 @@ function MainView:handle_action()
     local type, context = self:get_line_info(line)
     if type == "server" then
         -- Toggle expand/collapse for server
-        if context.status ~= "disabled" then
+        if context.status == "connected" then
             if self.expanded_server == context.name then
                 self.expanded_server = nil -- collapse
                 self:draw()
@@ -192,9 +192,9 @@ function MainView:handle_server_toggle()
                 vim.notify("Enabling server: " .. context.name)
                 State.hub_instance:start_mcp_server(context.name, {
                     callback = function(response, err)
-                        if err then
-                            vim.notify("Failed to enable server: " .. err, vim.log.levels.ERROR)
-                        end
+                        -- if err then
+                        --     vim.notify("Failed to enable server: " .. err, vim.log.levels.ERROR)
+                        -- end
                     end
                 })
             else
@@ -242,7 +242,7 @@ end
 ---@return NuiLine[]
 function MainView:render_hub_status()
     local lines = {}
-    -- Server state header and status
+    -- Server state header and status 
     local status = renderer.get_server_status_info(State.server_state.status)
     local status_line = NuiLine():append(status.icon, status.hl):append(({
         connected = "Connected",
@@ -406,7 +406,7 @@ function MainView:render_servers(line_offset)
     local sorted_servers = sort_servers(vim.deepcopy(State.server_state.servers))
 
     for _, server in ipairs(sorted_servers) do
-        local server_name_line = renderer.render_server_line(server)
+        local server_name_line = renderer.render_server_line(server, self.expanded_server == server.name)
         table.insert(lines, Text.pad_line(server_name_line, nil, 3))
         current_line = current_line + 1
         -- Prepare hover hint based on server status
@@ -542,9 +542,16 @@ function MainView:render()
 
     -- Servers section
     vim.list_extend(lines, self:render_servers(#lines))
-    -- Recent errors section
-    table.insert(lines, self:line())
-    vim.list_extend(lines, renderer.render_hub_errors(State.errors.server))
+    -- Recent errors section (show compact view without details)
+    table.insert(lines, Text.empty_line())
+    table.insert(lines, Text.empty_line())
+    table.insert(lines, Text.pad_line(NuiLine():append("Recent Issues", Text.highlights.title)))
+    local errors = renderer.render_hub_errors(nil, false)
+    if #errors > 0 then
+        vim.list_extend(lines, errors)
+    else
+        table.insert(lines, Text.pad_line(NuiLine():append("No recent issues", Text.highlights.muted)))
+    end
     return lines
 end
 

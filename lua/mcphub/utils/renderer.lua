@@ -8,10 +8,10 @@ local M = {}
 --- Get server status information
 ---@param status string Server status
 ---@return { icon: string, desc: string, hl: string } Status info
-function M.get_server_status_info(status)
+function M.get_server_status_info(status, expanded)
     return {
         icon = ({
-            connected = "● ",
+            connected = (expanded and Text.icons.triangleDown or Text.icons.triangleRight) .. " ",
             connecting = "◉ ",
             disconnecting = "○ ",
             disconnected = "○ ",
@@ -25,7 +25,7 @@ function M.get_server_status_info(status)
 
         hl = ({
             connected = Text.highlights.success,
-            connecting = Text.highlights.warning,
+            connecting = Text.highlights.success,
             disconnecting = Text.highlights.warning,
             disconnected = Text.highlights.warning,
             disabled = Text.highlights.muted
@@ -36,14 +36,16 @@ end
 --- Render a server line
 ---@param server table Server data
 ---@return { line: NuiLine, mapping: table? }
-function M.render_server_line(server)
-    local status = M.get_server_status_info(server.status)
+function M.render_server_line(server, active)
+    local status = M.get_server_status_info(server.status, active)
     local line = NuiLine():append(status.icon, status.hl):append(server.name, server.status == "connected" and
         Text.highlights.success or status.hl)
 
     -- Add error message for disconnected servers
-    if server.error ~= vim.NIL and server.error ~= "" then
-        line:append(" - ", Text.highlights.muted):append(server.error, Text.highlights.error)
+    if server.error ~= vim.NIL and server.status == "disconnected" and server.error ~= "" then
+        -- Get first line of error message
+        local error_lines = Text.multiline(server.error, Text.highlights.error)
+        line:append(" - ", Text.highlights.muted):append(error_lines[1], Text.highlights.error)
     end
 
     -- Add capabilities counts inline for connected servers
@@ -239,56 +241,66 @@ local function format_time(timestamp)
     return os.date("%H:%M:%S", math.floor(timestamp / 1000))
 end
 
-function M.render_hub_errors(errors)
+--- Render error lines without header
+---@param type? string Optional error type to filter (setup/server/runtime)
+---@param detailed? boolean Whether to show full error details
+---@return NuiLine[] Lines
+function M.render_hub_errors(error_type, detailed)
     local lines = {}
-
-    -- Section header always shown
-    table.insert(lines, Text.pad_line(NuiLine():append("Recent Issues ", Text.highlights.title), nil, 2))
-    -- table.insert(lines, Text.empty_line())
+    local errors = State:get_errors(error_type)
 
     if #errors > 0 then
-        for i = 1, #errors, 1 do
-            local err = errors[i]
-            local error_lines = Text.multiline(err.message, Text.highlights.error)
-            local first_line = NuiLine():append("• ", Text.highlights.error):append(error_lines[1])
-            error_lines[1] = first_line
-            vim.list_extend(lines, vim.tbl_map(Text.pad_line, error_lines))
+        for _, err in ipairs(errors) do
+            -- Get appropriate icon based on error type
+            local error_icon = ({
+                SETUP = Text.icons.setup_error,
+                SERVER = Text.icons.server_error,
+                RUNTIME = Text.icons.runtime_error
+            })[err.type] or Text.icons.error
 
-            -- Add error details if any
-            if err.details and next(err.details) then
-                local errlines = vim.tbl_map(function(t)
-                    return Text.pad_line(Text.pad_line(t))
-                end, Text.multiline(vim.inspect(err.details), Text.highlights.muted))
-                vim.list_extend(lines, errlines)
+            -- Handle multiline error messages
+            local message_lines = Text.multiline(err.message, Text.highlights.error)
+
+            -- First line with icon and timestamp
+            local first_line = NuiLine()
+            first_line:append(error_icon .. " ", Text.highlights.error)
+            first_line:append(message_lines[1], Text.highlights.error)
+            if err.timestamp then
+                first_line:append(" (" .. utils.format_relative_time(err.timestamp) .. ")", Text.highlights.muted)
+            end
+            table.insert(lines, Text.pad_line(first_line))
+
+            -- Add remaining lines with proper indentation
+            for i = 2, #message_lines do
+                local line = NuiLine()
+                line:append(message_lines[i], Text.highlights.error)
+                table.insert(lines, Text.pad_line(line, nil, 4))
+            end
+
+            -- Add error details if detailed mode and details exist
+            if detailed and err.details and next(err.details) then
+                -- Convert details to string
+                local detail_text = type(err.details) == "string" and err.details or vim.inspect(err.details)
+
+                -- Add indented details
+                local detail_lines = vim.tbl_map(function(l)
+                    return Text.pad_line(l, nil, 4)
+                end, Text.multiline(detail_text, Text.highlights.muted))
+                vim.list_extend(lines, detail_lines)
+                table.insert(lines, Text.empty_line())
             end
         end
-    else
-        -- Show placeholder when no errors
-        table.insert(lines, Text.pad_line(NuiLine():append("No issues found", Text.highlights.muted), nil, 3))
     end
 
-    table.insert(lines, Text.empty_line())
     return lines
 end
 
-function M.render_server_entries(entries, add_placeholder)
-    add_placeholder = add_placeholder or true
+--- Render server entry logs without header
+---@param entries table[] Array of log entries
+---@return NuiLine[] Lines
+function M.render_server_entries(entries)
     local lines = {}
 
-    local type_icons = {
-
-        info = " ",
-        warn = "⚠ ",
-        error = "✖ ",
-        debug = " "
-    }
-
-    local type_hl = {
-        info = Text.highlights.info,
-        warn = Text.highlights.warning,
-        error = Text.highlights.error,
-        debug = Text.highlights.muted
-    }
     if #entries > 0 then
         for _, entry in ipairs(entries) do
             if entry.timestamp and entry.message then
@@ -297,23 +309,22 @@ function M.render_server_entries(entries, add_placeholder)
                 line:append(string.format("[%s] ", format_time(entry.timestamp)), Text.highlights.muted)
 
                 -- Add type icon and message
-                line:append(type_icons[entry.type] or "• ", type_hl[entry.type])
-                local code = entry.code
-                if code then
-                    line:append(string.format("[Code: %s] ", code), Text.highlights.muted)
-                end
-                line:append(entry.message, type_hl[entry.type])
-                table.insert(lines, Text.pad_line(line))
+                line:append((Text.icons[entry.type] or "•") .. " ",
+                    Text.highlights[entry.type] or Text.highlights.muted)
 
-                -- Add extra data if available
-                -- TODO: show any related data on exapnding
+                -- Add error code if present
+                if entry.code then
+                    line:append(string.format("[Code: %s] ", entry.code), Text.highlights.muted)
+                end
+
+                -- Add main message
+                line:append(entry.message, Text.highlights[entry.type] or Text.highlights.muted)
+
+                table.insert(lines, Text.pad_line(line))
             end
         end
-    else
-        if add_placeholder then
-            table.insert(lines, Text.pad_line("No logs available", Text.highlights.muted))
-        end
     end
+
     return lines
 end
 

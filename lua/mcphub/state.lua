@@ -27,10 +27,7 @@ local State = {
 
     -- Error management
     errors = {
-        setup = {}, -- Setup-time errors
-        server = {}, -- Server-related errors
-        runtime = {}, -- Runtime errors
-        _by_id = {} -- Quick lookup by error ID
+        items = {} -- Array of error objects with type property
     },
 
     -- Server output
@@ -55,10 +52,7 @@ function State:reset()
         servers = {}
     }
     State.errors = {
-        setup = {},
-        server = {},
-        runtime = {},
-        _by_id = {}
+        items = {}
     }
     State.server_output = {
         entries = {}
@@ -95,15 +89,24 @@ end
 --- Add an error to state and optionally log it
 ---@param err MCPError The error to add
 ---@param log_level? string Optional explicit log level (debug/info/warn/error)
----@return string error_id The unique ID of the added error
 function State:add_error(err, log_level)
-    -- Add to appropriate category
-    table.insert(self.errors[err.type:lower()], err)
+    -- Add error to list
+    table.insert(self.errors.items, err)
+
+    -- Sort errors with newest first
+    table.sort(self.errors.items, function(a, b)
+        return (a.timestamp or 0) > (b.timestamp or 0)
+    end)
+
+    -- Keep reasonable history (max 100 errors)
+    if #self.errors.items > 100 then
+        table.remove(self.errors.items)
+    end
 
     -- Notify subscribers
     self:notify_subscribers({
         errors = true
-    }, err.type:lower())
+    }, "all")
 
     -- Log with explicit level or infer from error type
     if log_level then
@@ -113,33 +116,27 @@ function State:add_error(err, log_level)
         local level = err.type == "SETUP" and "error" or err.type == "SERVER" and "warn" or "info"
         log[level](tostring(err))
     end
-
-    return err.id
 end
 
 --- Clear errors of a specific type or all errors
 ---@param type? string Optional error type to clear (setup/server/runtime)
 function State:clear_errors(type)
     if type then
-        self.errors[type:lower()] = {}
-    else
-        for k, _ in pairs(self.errors) do
-            if k ~= "_by_id" then
-                self.errors[k] = {}
+        -- Filter out errors of specified type
+        local filtered = {}
+        for _, err in ipairs(self.errors.items) do
+            if err.type:lower() ~= type:lower() then
+                table.insert(filtered, err)
             end
         end
-        self.errors._by_id = {}
+        self.errors.items = filtered
+    else
+        -- Clear all errors
+        self.errors.items = {}
     end
     self:notify_subscribers({
         errors = true
     }, "all")
-end
-
---- Get error by ID
----@param id string Error ID
----@return MCPError|nil
-function State:get_error(id)
-    return self.errors._by_id[id]
 end
 
 --- Get all errors of a specific type
@@ -147,15 +144,16 @@ end
 ---@return MCPError[]
 function State:get_errors(type)
     if type then
-        return vim.deepcopy(self.errors[type:lower()] or {})
-    end
-    local all_errors = {}
-    for k, errors in pairs(self.errors) do
-        if k ~= "_by_id" then
-            vim.list_extend(all_errors, errors)
+        -- Filter by type
+        local filtered = {}
+        for _, err in ipairs(self.errors.items) do
+            if err.type:lower() == type:lower() then
+                table.insert(filtered, err)
+            end
         end
+        return vim.deepcopy(filtered)
     end
-    return all_errors
+    return vim.deepcopy(self.errors.items)
 end
 
 -- For server output (stdout/stderr)

@@ -26,7 +26,7 @@ end
 
 function HelpView:render_quick_start()
     local lines = {}
-    table.insert(lines, Text.section("Quick Start", {}, true)[1])
+    table.insert(lines, Text.pad_line(" Quick Start ", Text.highlights.header))
 
     local intro_text = [[
 MCPHub manages MCP (Model Context Protocol) servers through a centralized config file while providing an intuitive interface for testing tools and resources. Perfect for LLM integration with your Neovim workflow.
@@ -54,7 +54,7 @@ end
 
 function HelpView:render_navigation()
     local lines = {}
-    table.insert(lines, Text.section("Views & Navigation", {}, true)[1])
+    table.insert(lines, Text.pad_line(" Views & Navigation ", Text.highlights.header))
 
     local nav_items = {{
         key = "H",
@@ -91,7 +91,7 @@ end
 
 function HelpView:render_capabilities()
     local lines = {}
-    table.insert(lines, Text.section("Working with Servers", {}, true)[1])
+    table.insert(lines, Text.pad_line(" Working with servers ", Text.highlights.header))
 
     local capabilities_text = [[
 Testing Tools and Resources:
@@ -117,7 +117,7 @@ end
 
 function HelpView:render_troubleshooting()
     local lines = {}
-    table.insert(lines, Text.section("Troubleshooting", {}, true)[1])
+    table.insert(lines, Text.pad_line(" Troubleshooting ", Text.highlights.header))
 
     local help_text = [[
 Common Issues:

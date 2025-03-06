@@ -81,4 +81,64 @@ function M.format_token_count(count)
     end
 end
 
+--- Pretty print JSON string with optional unescaping of forward slashes
+---@param str string JSON string to format
+---@param unescape_slashes boolean? Whether to unescape forward slashes (default: true)
+---@return string Formatted JSON string
+function M.pretty_json(str, unescape_slashes)
+    local level = 0
+    local result = ""
+    local in_quotes = false
+    local escape_next = false
+    local indent = "  "
+
+    -- Default to true if not specified
+    if unescape_slashes == nil then
+        unescape_slashes = true
+    end
+
+    -- Pre-process to unescape forward slashes if requested
+    if unescape_slashes then
+        str = str:gsub("\\/", "/")
+    end
+
+    for i = 1, #str do
+        local char = str:sub(i, i)
+
+        -- Handle escape sequences properly
+        if escape_next then
+            escape_next = false
+            result = result .. char
+        elseif char == "\\" then
+            escape_next = true
+            result = result .. char
+        elseif char == '"' then
+            in_quotes = not in_quotes
+            result = result .. char
+        elseif not in_quotes then
+            if char == "{" or char == "[" then
+                level = level + 1
+                result = result .. char .. "\n" .. string.rep(indent, level)
+            elseif char == "}" or char == "]" then
+                level = level - 1
+                result = result .. "\n" .. string.rep(indent, level) .. char
+            elseif char == "," then
+                result = result .. char .. "\n" .. string.rep(indent, level)
+            elseif char == ":" then
+                -- Add space after colons for readability
+                result = result .. ": "
+            elseif char == " " or char == "\n" or char == "\t" then
+                -- Skip whitespace in non-quoted sections
+                -- (vim.json.encode already adds its own whitespace)
+            else
+                result = result .. char
+            end
+        else
+            -- In quotes, preserve all characters
+            result = result .. char
+        end
+    end
+    return result
+end
+
 return M

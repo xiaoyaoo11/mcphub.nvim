@@ -6,6 +6,7 @@ local handlers = require("mcphub.utils.handlers")
 local State = require("mcphub.state")
 local Error = require("mcphub.errors")
 local validation = require("mcphub.validation")
+local utils = require("mcphub.utils")
 
 -- Default timeouts
 local QUICK_TIMEOUT = 1000 -- 1s for quick operations like health checks
@@ -261,9 +262,7 @@ function MCPHub:start_mcp_server(name, opts)
     -- Call start endpoint
     return self:api_request("POST", string.format("servers/%s/start", name), {
         callback = function(response, err)
-            if not err then
-                self:refresh()
-            end
+            self:refresh()
             if opts.callback then
                 opts.callback(response, err)
             end
@@ -301,9 +300,7 @@ function MCPHub:stop_mcp_server(name, disable, opts)
             disable = "true"
         } or nil,
         callback = function(response, err)
-            if not err then
-                self:refresh()
-            end
+            self:refresh()
             if opts.callback then
                 opts.callback(response, err)
             end
@@ -522,7 +519,7 @@ function MCPHub:update_server_config(server_name, updates)
     config.mcpServers[server_name] = vim.tbl_deep_extend("force", config.mcpServers[server_name] or {}, updates)
 
     -- Write updated config back to file
-    local json_str = vim.json.encode(config)
+    local json_str = utils.pretty_json(vim.json.encode(config))
     local file = io.open(self.config, "w")
     if not file then
         return false, "Failed to open config file for writing"
