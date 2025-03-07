@@ -637,6 +637,7 @@ function MCPHub:refresh()
                 servers = response.servers or {},
             }),
         }, "server")
+        self:handle_servers_updated()
         return true
     end
 end

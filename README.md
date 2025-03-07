@@ -184,9 +184,11 @@ MCPHub.nvim provides extensions that integrate with popular Neovim chat plugins.
 
 ### Available Extensions
 
-- **[CodeCompanion](https://github.com/olimorris/codecompanion.nvim) Integration**: Add MCP capabilities to CodeCompanion
+#### CodeCompanion Integration
 
-- Add it as a dependency to load the plugin before codecompanion
+Add MCP capabilities to CodeCompanion.
+
+Add it as a dependency to load the plugin before codecompanion:
 
 ```lua
 {
@@ -221,6 +223,81 @@ MCPHub.nvim provides extensions that integrate with popular Neovim chat plugins.
 ```
 
 See the [extensions/](lua/mcphub/extensions/) folder for more examples and implementation details.
+
+#### Avante Integration
+
+The Avante extension automatically updates your `[mode].avanterules` file (e.g. `planning.avanterules`) whenever MCP servers or their tools are updated. This ensures Avante always has up-to-date information about available MCP capabilities in its system prompt.
+
+⚠️ **Important Loading Behavior**: Avante loads rules files only once when first opened after Neovim starts. Changes to enabled/disabled MCP servers will update the rules file, but Avante won't see these changes until you:
+
+1. Exit Neovim completely
+2. Start Neovim again
+3. Open Avante fresh
+
+Commands like `/reset`, `/new`, or `/clear` do not cause Avante to reload the rules file.
+
+⚠️ **Tool Conflicts**: Disable any built-in Avante tools that might conflict with enabled MCP servers to prevent duplicate functionality or unexpected behavior.
+
+##### Setup
+
+Add MCP capabilities to Avante by including the MCP tool in your setup:
+
+```lua
+require("avante").setup({
+    -- other config
+    custom_tools = {
+        -- optional: mode is "planning" that is when you open the chat using toggle or <leader>aa
+        --optional: cwd can be a string or a function that should returns path
+        require("mcphub.extensions.avante").mcp_tool("planning",function()
+          require("avante.utils").get_project_root()
+        end)
+    }
+})
+```
+
+⚠️ **Warning: File Override Behavior**
+
+This extension modifies your `[mode].avanterules` file. When creating a new file or replacing content, it uses this template:
+
+```jinja
+{% block mcp_servers %}
+# Active MCP Servers:
+- server1: tool1, tool2
+- server2: tool3, tool4
+
+# Available Tools and Resources:
+[Detailed list of capabilities...]
+{% endblock %}
+```
+
+File handling works as follows:
+
+1. If file has the MCP servers block:
+   - Only content within the block is modified
+   - Content outside the block remains untouched
+2. If no block present:
+   - **ENTIRE FILE CONTENT WILL BE REPLACED**
+   - A new file with proper block structure will be created
+   - All custom instructions will be lost
+
+To safely use custom instructions:
+
+1. Add the MCP servers block at the END of your `[mode].avanterules` file
+2. Put your custom instructions BEFORE the block
+3. Keep the block at the END to prevent MCP content from being overwritten
+
+Example `.avanterules` file with custom instructions:
+
+```jinja
+# Your Custom Instructions
+You should always write tests for your code.
+Handle edge cases carefully.
+
+# IMPORTANT: Keep this block at the end of file
+{% block mcp_servers %}
+[MCP server capabilities will be automatically updated here]
+{% endblock %}
+```
 
 Note: You can also access the Express server directly at http://localhost:[port]/api
 
