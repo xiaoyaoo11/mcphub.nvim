@@ -1,12 +1,12 @@
-local curl = require("plenary.curl")
+local Error = require("mcphub.errors")
 local Job = require("plenary.job")
+local State = require("mcphub.state")
+local curl = require("plenary.curl")
+local handlers = require("mcphub.utils.handlers")
 local log = require("mcphub.utils.log")
 local prompt_utils = require("mcphub.utils.prompt")
-local handlers = require("mcphub.utils.handlers")
-local State = require("mcphub.state")
-local Error = require("mcphub.errors")
-local validation = require("mcphub.validation")
 local utils = require("mcphub.utils")
+local validation = require("mcphub.validation")
 
 -- Default timeouts
 local QUICK_TIMEOUT = 1000 -- 1s for quick operations like health checks
@@ -33,7 +33,7 @@ function MCPHub:new(opts)
     -- Set up instance fields
     self.port = opts.port
     self.config = opts.config
-    self.shutdown_delay = opts.shutdown_delay or 0;
+    self.shutdown_delay = opts.shutdown_delay or 0
     self.ready = false
     self.server_job = nil
     self.is_owner = false -- Whether we started the server
@@ -47,8 +47,8 @@ function MCPHub:new(opts)
         server_state = {
             status = "disconnected",
             started_at = nil,
-            pid = nil
-        }
+            pid = nil,
+        },
     }, "server")
 
     return self
@@ -57,14 +57,13 @@ end
 --- Start the MCP Hub server
 --- @param opts? { on_ready: function, on_error: function }
 function MCPHub:start(opts, restart_callback)
-
     opts = opts or State.config
 
     -- Update state
     State:update({
         server_state = {
-            status = "connecting"
-        }
+            status = "connecting",
+        },
     }, "server")
     local has_called_restart_callback = false
 
@@ -82,7 +81,7 @@ function MCPHub:start(opts, restart_callback)
 
         self.server_job = Job:new({
             command = "mcp-hub",
-            args = {"--port", tostring(self.port), "--config", self.config, "--shutdown-delay", self.shutdown_delay},
+            args = { "--port", tostring(self.port), "--config", self.config, "--shutdown-delay", self.shutdown_delay },
             detached = true,
             on_stdout = vim.schedule_wrap(function(_, data)
                 if has_called_restart_callback == false then
@@ -103,13 +102,13 @@ function MCPHub:start(opts, restart_callback)
                 State:update({
                     server_state = {
                         status = "disconnected",
-                        pid = nil
-                    }
+                        pid = nil,
+                    },
                 }, "server")
 
                 self.ready = false
                 self.server_job = nil
-            end)
+            end),
         })
 
         self.server_job:start()
@@ -127,8 +126,8 @@ function MCPHub:handle_server_ready(opts)
         server_state = {
             status = "connected",
             started_at = vim.loop.now(),
-            pid = self.server_job and self.server_job.pid
-        }
+            pid = self.server_job and self.server_job.pid,
+        },
     }, "server")
 
     -- update the state
@@ -137,23 +136,24 @@ function MCPHub:handle_server_ready(opts)
             if err then
                 if self:is_ready() then
                     local health_err = Error("SERVER", Error.Types.SERVER.HEALTH_CHECK, "Health check failed", {
-                        error = err
+                        error = err,
                     })
                     State:add_error(health_err)
                 end
             else
                 State:update({
                     server_state = vim.tbl_extend("force", State.server_state, {
-                        servers = response.servers or {}
-                    })
+                        servers = response.servers or {},
+                    }),
                 }, "server")
+                self:handle_servers_updated()
 
                 -- Register client
                 self:register_client({
                     callback = function(response, reg_err)
                         if reg_err then
                             local err = Error("SERVER", Error.Types.SERVER.CONNECTION, "Client registration failed", {
-                                error = reg_err
+                                error = reg_err,
                             })
                             State:add_error(err)
                             if opts.on_error then
@@ -164,10 +164,10 @@ function MCPHub:handle_server_ready(opts)
                         if opts.on_ready then
                             opts.on_ready(self)
                         end
-                    end
+                    end,
                 })
             end
-        end
+        end,
     })
 end
 
@@ -194,7 +194,7 @@ function MCPHub:check_server(callback)
     -- Quick health check
     local opts = {
         timeout = QUICK_TIMEOUT,
-        skip_ready_check = true
+        skip_ready_check = true,
     }
 
     opts.callback = function(response, err)
@@ -214,11 +214,15 @@ end
 --- Register client with server
 --- @param opts? { callback?: function } Optional callback(response: table|nil, error?: string)
 function MCPHub:register_client(opts)
-    return self:api_request("POST", "client/register", vim.tbl_extend("force", {
-        body = {
-            clientId = self.client_id
-        }
-    }, opts or {}))
+    return self:api_request(
+        "POST",
+        "client/register",
+        vim.tbl_extend("force", {
+            body = {
+                clientId = self.client_id,
+            },
+        }, opts or {})
+    )
 end
 
 --- Get server status information
@@ -252,12 +256,12 @@ function MCPHub:start_mcp_server(name, opts)
             end
         end
         State:notify_subscribers({
-            server_state = true
+            server_state = true,
         }, "server")
     end
 
     self:update_server_config(name, {
-        disabled = false
+        disabled = false,
     })
     -- Call start endpoint
     return self:api_request("POST", string.format("servers/%s/start", name), {
@@ -266,7 +270,7 @@ function MCPHub:start_mcp_server(name, opts)
             if opts.callback then
                 opts.callback(response, err)
             end
-        end
+        end,
     })
 end
 
@@ -287,24 +291,24 @@ function MCPHub:stop_mcp_server(name, disable, opts)
             end
         end
         State:notify_subscribers({
-            server_state = true
+            server_state = true,
         }, "server")
     end
 
     self:update_server_config(name, {
-        disabled = disable or false
+        disabled = disable or false,
     })
     -- Call stop endpoint
     return self:api_request("POST", string.format("servers/%s/stop", name), {
         query = disable and {
-            disable = "true"
+            disable = "true",
         } or nil,
         callback = function(response, err)
             self:refresh()
             if opts.callback then
                 opts.callback(response, err)
             end
-        end
+        end,
     })
 end
 
@@ -332,14 +336,17 @@ function MCPHub:call_tool(server_name, tool_name, args, opts)
         arguments.__object = true
     end
 
-    local response, err = self:api_request("POST", string.format("servers/%s/tools", server_name),
+    local response, err = self:api_request(
+        "POST",
+        string.format("servers/%s/tools", server_name),
         vim.tbl_extend("force", {
             timeout = opts.timeout or TOOL_TIMEOUT,
             body = {
                 tool = tool_name,
-                arguments = arguments
-            }
-        }, opts))
+                arguments = arguments,
+            },
+        }, opts)
+    )
     -- handle sync calls
     if opts.callback == nil then
         return (opts.return_text == true and prompt_utils.parse_tool_response(response) or response), err
@@ -362,13 +369,16 @@ function MCPHub:access_resource(server_name, uri, opts)
             end
         end
     end
-    local response, err = self:api_request("POST", string.format("servers/%s/resources", server_name),
+    local response, err = self:api_request(
+        "POST",
+        string.format("servers/%s/resources", server_name),
         vim.tbl_extend("force", {
             timeout = opts.timeout or RESOURCE_TIMEOUT,
             body = {
-                uri = uri
-            }
-        }, opts))
+                uri = uri,
+            },
+        }, opts)
+    )
     -- handle sync calls
     if opts.callback == nil then
         return (opts.return_text == true and prompt_utils.parse_resource_response(response) or response), err
@@ -401,7 +411,7 @@ function MCPHub:api_request(method, path, opts)
         timeout = opts.timeout or QUICK_TIMEOUT,
         headers = {
             ["Content-Type"] = "application/json",
-            ["Accept"] = "application/json"
+            ["Accept"] = "application/json",
         },
         on_error = vim.schedule_wrap(function(err)
             log.debug(string.format("Error while making request to %s: %s", path, vim.inspect(err)))
@@ -411,7 +421,7 @@ function MCPHub:api_request(method, path, opts)
             else
                 State:add_error(error)
             end
-        end)
+        end),
     }
     if opts.body then
         request_opts.body = vim.fn.json_encode(opts.body)
@@ -476,7 +486,7 @@ function MCPHub:api_request(method, path, opts)
         curl.request(vim.tbl_extend("force", request_opts, {
             callback = vim.schedule_wrap(function(response)
                 process_response(response)
-            end)
+            end),
         }))
     else
         -- Sync mode
@@ -498,6 +508,10 @@ function MCPHub:load_config()
     end
 
     return result
+end
+
+function MCPHub:handle_servers_updated()
+    State:emit("servers_updated", { prompt = self:get_active_servers_prompt(), hub = self })
 end
 
 --- Update server configuration in the MCP config file
@@ -530,7 +544,7 @@ function MCPHub:update_server_config(server_name, updates)
 
     -- Update State
     State:update({
-        servers_config = config.mcpServers
+        servers_config = config.mcpServers,
     }, "setup")
 
     return true
@@ -566,7 +580,7 @@ function MCPHub:update_tool_config(server_name, tool_name, disable)
 
     -- Update server config using existing function
     return self:update_server_config(server_name, {
-        disabled_tools = disabled_tools
+        disabled_tools = disabled_tools,
     })
 end
 
@@ -576,8 +590,8 @@ function MCPHub:stop()
     -- Unregister client
     self:api_request("POST", "client/unregister", {
         body = {
-            clientId = self.client_id
-        }
+            clientId = self.client_id,
+        },
     })
 
     if self.is_owner then
@@ -589,8 +603,8 @@ function MCPHub:stop()
     State:update({
         server_state = {
             status = "disconnected",
-            pid = nil
-        }
+            pid = nil,
+        },
     }, "server")
 
     -- Clear state
@@ -612,7 +626,7 @@ function MCPHub:refresh()
     if err then
         if self:is_ready() then
             local health_err = Error("SERVER", Error.Types.SERVER.HEALTH_CHECK, "Health check failed", {
-                error = err
+                error = err,
             })
             State:add_error(health_err)
         end
@@ -620,8 +634,8 @@ function MCPHub:refresh()
     else
         State:update({
             server_state = vim.tbl_extend("force", State.server_state, {
-                servers = response.servers or {}
-            })
+                servers = response.servers or {},
+            }),
         }, "server")
         return true
     end
@@ -712,7 +726,7 @@ function MCPHub:get_prompts(opts)
     return {
         active_servers = self:get_active_servers_prompt(),
         use_mcp_tool = prompt_utils.get_use_mcp_tool_prompt(opts.use_mcp_tool_example),
-        access_mcp_resource = prompt_utils.get_access_mcp_resource_prompt(opts.access_mcp_resource_example)
+        access_mcp_resource = prompt_utils.get_access_mcp_resource_prompt(opts.access_mcp_resource_example),
     }
 end
 

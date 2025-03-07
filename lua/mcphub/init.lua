@@ -1,10 +1,10 @@
-local MCPHub = require("mcphub.hub")
-local log = require("mcphub.utils.log")
-local Job = require("plenary.job")
-local version = require("mcphub.version")
-local State = require("mcphub.state")
-local validation = require("mcphub.validation")
 local Error = require("mcphub.errors")
+local Job = require("plenary.job")
+local MCPHub = require("mcphub.hub")
+local State = require("mcphub.state")
+local log = require("mcphub.utils.log")
+local validation = require("mcphub.validation")
+local version = require("mcphub.version")
 
 local M = {}
 
@@ -30,7 +30,7 @@ function M.setup(opts)
 
     -- Update state to in_progress
     State:update({
-        setup_state = "in_progress"
+        setup_state = "in_progress",
     }, "setup")
 
     -- Set default options
@@ -42,12 +42,10 @@ function M.setup(opts)
             level = vim.log.levels.ERROR,
             to_file = false,
             file_path = nil,
-            prefix = "MCPHub"
+            prefix = "MCPHub",
         },
-        on_ready = function()
-        end,
-        on_error = function()
-        end
+        on_ready = function() end,
+        on_error = function() end,
     }, opts or {})
 
     -- Set up logging first
@@ -65,7 +63,7 @@ function M.setup(opts)
             State:add_error(Error("RUNTIME", Error.Types.RUNTIME.INVALID_STATE, "UI not initialized"))
         end
     end, {
-        desc = "Toggle MCP Hub window"
+        desc = "Toggle MCP Hub window",
     })
 
     -- Validate options
@@ -75,7 +73,7 @@ function M.setup(opts)
         -- Add error to state and invoke error callback
         State:add_error(err)
         State:update({
-            setup_state = "failed"
+            setup_state = "failed",
         }, "setup")
         config.on_error(tostring(err))
         return nil
@@ -89,7 +87,7 @@ function M.setup(opts)
 
     -- Setup cleanup
     local group = vim.api.nvim_create_augroup("mcphub_cleanup", {
-        clear = true
+        clear = true,
     })
     vim.api.nvim_create_autocmd("VimLeavePre", {
         group = group,
@@ -98,20 +96,26 @@ function M.setup(opts)
                 State.hub_instance:stop()
             end
             -- UI cleanup is handled by its own autocmd
-        end
+        end,
     })
 
     -- Start version check
     Job:new({
         command = "mcp-hub",
-        args = {"--version"},
+        args = { "--version" },
         on_exit = vim.schedule_wrap(function(j, code)
             if code ~= 0 then
-                local err = Error("SETUP", Error.Types.SETUP.MISSING_DEPENDENCY, string.format(
-                    "mcp-hub not found. Run 'npm install -g mcp-hub@%s'", version.REQUIRED_NODE_VERSION.string))
+                local err = Error(
+                    "SETUP",
+                    Error.Types.SETUP.MISSING_DEPENDENCY,
+                    string.format(
+                        "mcp-hub not found. Run 'npm install -g mcp-hub@%s'",
+                        version.REQUIRED_NODE_VERSION.string
+                    )
+                )
                 State:add_error(err)
                 State:update({
-                    setup_state = "failed"
+                    setup_state = "failed",
                 }, "setup")
                 config.on_error(tostring(err))
                 return
@@ -122,7 +126,7 @@ function M.setup(opts)
             if not version_result.ok then
                 State:add_error(version_result.error)
                 State:update({
-                    setup_state = "failed"
+                    setup_state = "failed",
                 }, "setup")
                 config.on_error(tostring(version_result.error))
                 return
@@ -134,7 +138,7 @@ function M.setup(opts)
                 local err = Error("SETUP", Error.Types.SETUP.SERVER_START, "Failed to create MCPHub instance")
                 State:add_error(err)
                 State:update({
-                    setup_state = "failed"
+                    setup_state = "failed",
                 }, "setup")
                 config.on_error(tostring(err))
                 return
@@ -145,18 +149,26 @@ function M.setup(opts)
             State.hub_instance = hub
             State:notify_subscribers({
                 setup_state = true,
-                hub_instance = true
+                hub_instance = true,
             }, "setup")
 
             -- Start hub
             hub:start({
                 on_ready = config.on_ready,
-                on_error = config.on_error
+                on_error = config.on_error,
             })
-        end)
+        end),
     }):start()
 
     return State.hub_instance
+end
+
+function M.on(event, callback)
+    State:add_event_listener(event, callback)
+end
+
+function M.off(event, callback)
+    State:remove_event_listener(event, callback)
 end
 
 function M.get_hub_instance()

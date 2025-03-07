@@ -6,202 +6,236 @@
 local log = require("mcphub.utils.log")
 
 local State = {
-    -- Setup state
-    setup_state = "not_started",
+  -- Setup state
+  setup_state = "not_started",
 
-    -- config
-    config = {},
-    servers_config = {},
+  -- config
+  config = {},
+  servers_config = {},
 
-    -- Core instances
-    hub_instance = nil,
-    ui_instance = nil,
+  -- Core instances
+  hub_instance = nil,
+  ui_instance = nil,
 
-    -- Server state
-    server_state = {
-        status = "disconnected", -- disconnected/connecting/connected
-        pid = nil, -- Server process ID when running
-        started_at = nil, -- When server was started
-        servers = {}
-    },
+  -- Server state
+  server_state = {
+    status = "disconnected",     -- disconnected/connecting/connected
+    pid = nil,                   -- Server process ID when running
+    started_at = nil,            -- When server was started
+    servers = {},
+  },
 
-    -- Error management
-    errors = {
-        items = {} -- Array of error objects with type property
-    },
+  -- Error management
+  errors = {
+    items = {},     -- Array of error objects with type property
+  },
 
-    -- Server output
-    server_output = {
-        entries = {} -- Chronological server output entries
-    },
+  -- Server output
+  server_output = {
+    entries = {},     -- Chronological server output entries
+  },
 
-    -- State management
-    last_update = 0,
-    subscribers = {
-        ui = {}, -- UI-related subscribers
-        server = {}, -- Server state subscribers
-        all = {} -- All state changes subscribers
-    }
+  -- State management
+  last_update = 0,
+  subscribers = {
+    ui = {},         -- UI-related subscribers
+    server = {},     -- Server state subscribers
+    all = {},        -- All state changes subscribers
+  },
+
+  -- subscribers
+  event_subscribers = {
+    --on_servers_updated
+  },
 }
 
 function State:reset()
-    State.server_state = {
-        status = "disconnected",
-        pid = nil,
-        started_at = nil,
-        servers = {}
-    }
-    State.errors = {
-        items = {}
-    }
-    State.server_output = {
-        entries = {}
-    }
-    State.last_update = 0
+  State.server_state = {
+    status = "disconnected",
+    pid = nil,
+    started_at = nil,
+    servers = {},
+  }
+  State.errors = {
+    items = {},
+  }
+  State.server_output = {
+    entries = {},
+  }
+  State.last_update = 0
 end
 
 function State:update(partial_state, update_type)
-    update_type = update_type or "all"
-    local changes = {}
+  update_type = update_type or "all"
+  local changes = {}
 
-    -- Track changes
-    for k, v in pairs(partial_state) do
-        if type(v) == "table" then
-            if not vim.deep_equal(self[k], v) then
-                changes[k] = true
-                self[k] = vim.tbl_deep_extend("force", self[k] or {}, v)
-            end
-        else
-            if self[k] ~= v then
-                changes[k] = true
-                self[k] = v
-            end
-        end
+  -- Track changes
+  for k, v in pairs(partial_state) do
+    if type(v) == "table" then
+      if not vim.deep_equal(self[k], v) then
+        changes[k] = true
+        self[k] = vim.tbl_deep_extend("force", self[k] or {}, v)
+      end
+    else
+      if self[k] ~= v then
+        changes[k] = true
+        self[k] = v
+      end
     end
+  end
 
-    -- Notify if changed
-    if next(changes) then
-        self.last_update = vim.loop.now()
-        self:notify_subscribers(changes, update_type)
-    end
+  -- Notify if changed
+  if next(changes) then
+    self.last_update = vim.loop.now()
+    self:notify_subscribers(changes, update_type)
+  end
 end
 
 --- Add an error to state and optionally log it
 ---@param err MCPError The error to add
 ---@param log_level? string Optional explicit log level (debug/info/warn/error)
 function State:add_error(err, log_level)
-    -- Add error to list
-    table.insert(self.errors.items, err)
+  -- Add error to list
+  table.insert(self.errors.items, err)
 
-    -- Sort errors with newest first
-    table.sort(self.errors.items, function(a, b)
-        return (a.timestamp or 0) > (b.timestamp or 0)
-    end)
+  -- Sort errors with newest first
+  table.sort(self.errors.items, function(a, b)
+    return (a.timestamp or 0) > (b.timestamp or 0)
+  end)
 
-    -- Keep reasonable history (max 100 errors)
-    if #self.errors.items > 100 then
-        table.remove(self.errors.items)
-    end
+  -- Keep reasonable history (max 100 errors)
+  if #self.errors.items > 100 then
+    table.remove(self.errors.items)
+  end
 
-    -- Notify subscribers
-    self:notify_subscribers({
-        errors = true
-    }, "all")
+  -- Notify subscribers
+  self:notify_subscribers({
+    errors = true,
+  }, "all")
 
-    -- Log with explicit level or infer from error type
-    if log_level then
-        log[log_level:lower()](tostring(err))
-    else
-        -- Default logging behavior based on error type
-        local level = err.type == "SETUP" and "error" or err.type == "SERVER" and "warn" or "info"
-        log[level](tostring(err))
-    end
+  -- Log with explicit level or infer from error type
+  if log_level then
+    log[log_level:lower()](tostring(err))
+  else
+    -- Default logging behavior based on error type
+    local level = err.type == "SETUP" and "error" or err.type == "SERVER" and "warn" or "info"
+    log[level](tostring(err))
+  end
 end
 
 --- Clear errors of a specific type or all errors
 ---@param type? string Optional error type to clear (setup/server/runtime)
 function State:clear_errors(type)
-    if type then
-        -- Filter out errors of specified type
-        local filtered = {}
-        for _, err in ipairs(self.errors.items) do
-            if err.type:lower() ~= type:lower() then
-                table.insert(filtered, err)
-            end
-        end
-        self.errors.items = filtered
-    else
-        -- Clear all errors
-        self.errors.items = {}
+  if type then
+    -- Filter out errors of specified type
+    local filtered = {}
+    for _, err in ipairs(self.errors.items) do
+      if err.type:lower() ~= type:lower() then
+        table.insert(filtered, err)
+      end
     end
-    self:notify_subscribers({
-        errors = true
-    }, "all")
+    self.errors.items = filtered
+  else
+    -- Clear all errors
+    self.errors.items = {}
+  end
+  self:notify_subscribers({
+    errors = true,
+  }, "all")
 end
 
 --- Get all errors of a specific type
 ---@param type? string Optional error type (setup/server/runtime)
 ---@return MCPError[]
 function State:get_errors(type)
-    if type then
-        -- Filter by type
-        local filtered = {}
-        for _, err in ipairs(self.errors.items) do
-            if err.type:lower() == type:lower() then
-                table.insert(filtered, err)
-            end
-        end
-        return vim.deepcopy(filtered)
+  if type then
+    -- Filter by type
+    local filtered = {}
+    for _, err in ipairs(self.errors.items) do
+      if err.type:lower() == type:lower() then
+        table.insert(filtered, err)
+      end
     end
-    return vim.deepcopy(self.errors.items)
+    return vim.deepcopy(filtered)
+  end
+  return vim.deepcopy(self.errors.items)
+end
+
+function State:emit(event, data)
+  local event_subscribers = self.event_subscribers[event]
+  if event_subscribers then
+    for _, cb in ipairs(event_subscribers) do
+      cb(data)
+    end
+  end
+end
+
+function State:add_event_listener(event, callback)
+  self.event_subscribers[event] = self.event_subscribers[event] or {}
+  table.insert(self.event_subscribers[event], callback)
+end
+
+function State:remove_event_listener(event, callback)
+  if self.event_subscribers[event] then
+    for i, cb in ipairs(self.event_subscribers[event]) do
+      if cb == callback then
+        table.remove(self.event_subscribers[event], i)
+        break
+      end
+    end
+  end
+end
+
+function State:remove_all_event_listeners(event)
+  self.event_subscribers[event] = {}
 end
 
 -- For server output (stdout/stderr)
 function State:add_server_output(entry)
-    if not entry or not entry.type or not entry.message then
-        return
-    end
+  if not entry or not entry.type or not entry.message then
+    return
+  end
 
-    -- Ensure entry has timestamp
-    entry.timestamp = entry.timestamp or vim.loop.now()
+  -- Ensure entry has timestamp
+  entry.timestamp = entry.timestamp or vim.loop.now()
 
-    table.insert(self.server_output.entries, {
-        type = entry.type, -- info/warn/error/debug
-        message = entry.message, -- The actual message
-        timestamp = entry.timestamp,
-        data = entry.data -- Optional extra data
-    })
+  table.insert(self.server_output.entries, {
+    type = entry.type,           -- info/warn/error/debug
+    message = entry.message,     -- The actual message
+    timestamp = entry.timestamp,
+    data = entry.data,           -- Optional extra data
+  })
 
-    -- Keep reasonable history
-    if #self.server_output.entries > 1000 then
-        table.remove(self.server_output.entries, 1)
-    end
+  -- Keep reasonable history
+  if #self.server_output.entries > 1000 then
+    table.remove(self.server_output.entries, 1)
+  end
 
-    self:notify_subscribers({
-        server_output = true
-    }, "server")
+  self:notify_subscribers({
+    server_output = true,
+  }, "server")
 end
 
 function State:subscribe(callback, types)
-    types = types or {"all"}
-    for _, type in ipairs(types) do
-        if self.subscribers[type] then
-            table.insert(self.subscribers[type], callback)
-        end
+  types = types or { "all" }
+  for _, type in ipairs(types) do
+    if self.subscribers[type] then
+      table.insert(self.subscribers[type], callback)
     end
+  end
 end
 
 function State:notify_subscribers(changes, update_type)
-    -- Notify type-specific subscribers
-    if update_type ~= "all" and self.subscribers[update_type] then
-        for _, callback in ipairs(self.subscribers[update_type]) do
-            callback(self, changes)
-        end
+  -- Notify type-specific subscribers
+  if update_type ~= "all" and self.subscribers[update_type] then
+    for _, callback in ipairs(self.subscribers[update_type]) do
+      callback(self, changes)
     end
-    -- Always notify 'all' subscribers
-    for _, callback in ipairs(self.subscribers.all) do
-        callback(self, changes)
-    end
+  end
+  -- Always notify 'all' subscribers
+  for _, callback in ipairs(self.subscribers.all) do
+    callback(self, changes)
+  end
 end
 
 return State
