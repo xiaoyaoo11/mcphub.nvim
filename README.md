@@ -249,7 +249,7 @@ require("avante").setup({
         -- optional: mode is "planning" that is when you open the chat using toggle or <leader>aa
         --optional: cwd can be a string or a function that should returns path
         require("mcphub.extensions.avante").mcp_tool("planning",function()
-          require("avante.utils").get_project_root()
+          return require("avante.utils").get_project_root()
         end)
     }
 })
