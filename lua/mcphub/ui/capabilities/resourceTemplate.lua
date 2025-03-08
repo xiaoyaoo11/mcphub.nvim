@@ -1,13 +1,13 @@
-local State = require("mcphub.state")
 local Base = require("mcphub.ui.capabilities.base")
-local Text = require("mcphub.utils.text")
 local NuiLine = require("mcphub.utils.nuiline")
+local State = require("mcphub.state")
+local Text = require("mcphub.utils.text")
 local highlights = require("mcphub.utils.highlights").groups
 
 ---@class ResourceTemplateHandler : CapabilityHandler
 ---@field super CapabilityHandler
 local ResourceTemplateHandler = setmetatable({}, {
-    __index = Base
+    __index = Base,
 })
 ResourceTemplateHandler.__index = ResourceTemplateHandler
 ResourceTemplateHandler.type = "resourceTemplate"
@@ -15,7 +15,7 @@ ResourceTemplateHandler.type = "resourceTemplate"
 function ResourceTemplateHandler:new(server_name, capability_info, view)
     local handler = Base.new(self, server_name, capability_info, view)
     handler.state = vim.tbl_extend("force", handler.state, {
-        input_value = ""
+        input_value = "",
     })
     return handler
 end
@@ -39,7 +39,7 @@ function ResourceTemplateHandler:execute()
             callback = function(response, err)
                 self:handle_response(response, err)
                 self.view:draw()
-            end
+            end,
         })
     end
 end
@@ -72,8 +72,10 @@ function ResourceTemplateHandler:render(line_offset)
     vim.list_extend(lines, self:render_section_start("Template Information"))
 
     -- Template details
-    local details = {NuiLine():append("Name: ", highlights.muted):append(self.info.name, highlights.success),
-                     NuiLine():append("Template: ", highlights.muted):append(self.info.uriTemplate, highlights.info)}
+    local details = {
+        NuiLine():append("Name: ", highlights.muted):append(self.info.name, highlights.success),
+        NuiLine():append("Template: ", highlights.muted):append(self.info.uriTemplate, highlights.info),
+    }
 
     if self.info.mimeType then
         table.insert(details, NuiLine():append("Type: ", highlights.muted):append(self.info.mimeType, highlights.info))
@@ -95,7 +97,7 @@ function ResourceTemplateHandler:render(line_offset)
 
     -- Input field
     local input_line = NuiLine():append("> ", highlights.success):append(self.state.input_value or "", highlights.info)
-    vim.list_extend(lines, self:render_section_content({input_line}, 2))
+    vim.list_extend(lines, self:render_section_content({ input_line }, 2))
 
     -- Track input line
     self:track_line(line_offset + #lines, "input")
@@ -103,13 +105,17 @@ function ResourceTemplateHandler:render(line_offset)
     -- Action button
     local button_line
     if self.state.is_executing then
-        button_line = NuiLine():append("[ ", highlights.muted):append("Processing...", highlights.muted):append(" ]",
-            highlights.muted)
+        button_line = NuiLine()
+            :append("[ ", highlights.muted)
+            :append("Processing...", highlights.muted)
+            :append(" ]", highlights.muted)
     else
-        button_line = NuiLine():append("[ ", highlights.success_fill):append("Access", highlights.success_fill):append(
-            " ]", highlights.success_fill)
+        button_line = NuiLine()
+            :append("[ ", highlights.success_fill)
+            :append("Access", highlights.success_fill)
+            :append(" ]", highlights.success_fill)
     end
-    vim.list_extend(lines, self:render_section_content({NuiLine():append(" "), button_line}, 2))
+    vim.list_extend(lines, self:render_section_content({ NuiLine():append(" "), button_line }, 2))
 
     -- Track submit line for interaction
     self:track_line(line_offset + #lines, "submit")
@@ -117,8 +123,8 @@ function ResourceTemplateHandler:render(line_offset)
     -- Error message if any
     if self.state.error then
         table.insert(lines, Text.pad_line(NuiLine():append("│", highlights.muted)))
-        local error_line = NuiLine():append("⚠ ", highlights.error):append(self.state.error, highlights.error)
-        vim.list_extend(lines, self:render_section_content({error_line}, 2))
+        local error_lines = Text.multiline(self.state.error, highlights.error)
+        vim.list_extend(lines, self:render_section_content(error_lines, 2))
     end
 
     vim.list_extend(lines, self:render_section_end())

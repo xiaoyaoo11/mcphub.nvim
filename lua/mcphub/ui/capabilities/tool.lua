@@ -1,7 +1,7 @@
-local State = require("mcphub.state")
 local Base = require("mcphub.ui.capabilities.base")
-local Text = require("mcphub.utils.text")
 local NuiLine = require("mcphub.utils.nuiline")
+local State = require("mcphub.state")
+local Text = require("mcphub.utils.text")
 local highlights = require("mcphub.utils.highlights").groups
 local Handlers = require("mcphub.utils.handlers")
 local log = require("mcphub.utils.log")
@@ -9,7 +9,7 @@ local log = require("mcphub.utils.log")
 ---@class ToolHandler : CapabilityHandler
 ---@field super CapabilityHandler
 local ToolHandler = setmetatable({}, {
-    __index = Base
+    __index = Base,
 })
 ToolHandler.__index = ToolHandler
 ToolHandler.type = "tool"
@@ -19,8 +19,8 @@ function ToolHandler:new(server_name, capability_info, view)
     handler.state = vim.tbl_extend("force", handler.state, {
         params = {
             values = {},
-            errors = {}
-        }
+            errors = {},
+        },
     })
     return handler
 end
@@ -39,7 +39,7 @@ function ToolHandler:get_ordered_params()
             description = prop.description,
             required = vim.tbl_contains(self.info.inputSchema.required or {}, name),
             default = prop.default,
-            value = self.state.params.values[name]
+            value = self.state.params.values[name],
         })
     end
 
@@ -128,8 +128,10 @@ function ToolHandler:handle_input_action(param_name)
         return
     end
 
-    self:handle_input(string.format("%s (%s): ", param_name, self:format_param_type(param_schema)),
-        self.state.params.values[param_name], function(input)
+    self:handle_input(
+        string.format("%s (%s): ", param_name, self:format_param_type(param_schema)),
+        self.state.params.values[param_name],
+        function(input)
             -- Clear previous error
             self.state.params.errors[param_name] = nil
 
@@ -154,7 +156,8 @@ function ToolHandler:handle_input_action(param_name)
                 end
             end
             self.view:draw()
-        end)
+        end
+    )
 end
 
 function ToolHandler:handle_action(line)
@@ -206,7 +209,7 @@ function ToolHandler:execute()
             callback = function(response, err)
                 self:handle_response(response, err)
                 self.view:draw()
-            end
+            end,
         })
     end
 end
@@ -228,14 +231,20 @@ function ToolHandler:render_param_form(line_offset)
         -- Submit button
         local submit_content = NuiLine()
         if self.state.is_executing then
-            submit_content:append("[ ", highlights.muted):append("Processing...", highlights.muted):append(" ]",
-                highlights.muted)
+            submit_content
+                :append("[ ", highlights.muted)
+                :append("Processing...", highlights.muted)
+                :append(" ]", highlights.muted)
         else
-            submit_content:append("[ ", highlights.success_fill):append("Submit", highlights.success_fill):append(" ]",
-                highlights.success_fill)
+            submit_content
+                :append("[ ", highlights.success_fill)
+                :append("Submit", highlights.success_fill)
+                :append(" ]", highlights.success_fill)
         end
-        vim.list_extend(lines, self:render_section_content(
-            {placeholder, NuiLine():append(" ", highlights.muted), submit_content}, 2))
+        vim.list_extend(
+            lines,
+            self:render_section_content({ placeholder, NuiLine():append(" ", highlights.muted), submit_content }, 2)
+        )
 
         -- Track submit line
         self:track_line(line_offset + #lines, "submit")
@@ -244,31 +253,33 @@ function ToolHandler:render_param_form(line_offset)
         local params = self:get_ordered_params()
         for _, param in ipairs(params) do
             -- Parameter name and type
-            local name_line = NuiLine():append(param.required and "* " or "  ", highlights.error):append(param.name,
-                highlights.success):append(" (", highlights.muted):append(self:format_param_type(param),
-                highlights.muted):append(")", highlights.muted)
-            vim.list_extend(lines, self:render_section_content({name_line}, 2))
+            local name_line = NuiLine()
+                :append(param.required and "* " or "  ", highlights.error)
+                :append(param.name, highlights.success)
+                :append(" (", highlights.muted)
+                :append(self:format_param_type(param), highlights.muted)
+                :append(")", highlights.muted)
+            vim.list_extend(lines, self:render_section_content({ name_line }, 2))
 
             -- Description if any
             if param.description then
                 for _, desc_line in ipairs(Text.multiline(param.description, highlights.muted)) do
-                    vim.list_extend(lines, self:render_section_content({desc_line}, 4))
+                    vim.list_extend(lines, self:render_section_content({ desc_line }, 4))
                 end
             end
 
             -- Input field
             local value = self.state.params.values[param.name]
             local input_line = NuiLine():append("> ", highlights.success):append(value or "", highlights.info)
-            vim.list_extend(lines, self:render_section_content({input_line}, 2))
+            vim.list_extend(lines, self:render_section_content({ input_line }, 2))
 
             -- Track input line
             self:track_line(line_offset + #lines, "input", param.name)
 
             -- Error if any
             if self.state.params.errors[param.name] then
-                local error_line = NuiLine():append("⚠ ", highlights.error):append(
-                    self.state.params.errors[param.name], highlights.error)
-                vim.list_extend(lines, self:render_section_content({error_line}, 2))
+                local error_lines = Text.multiline(self.state.params.errors[param.name], highlights.error)
+                vim.list_extend(lines, self:render_section_content(error_lines, 2))
             end
 
             table.insert(lines, Text.pad_line(NuiLine():append("│", highlights.muted)))
@@ -277,13 +288,17 @@ function ToolHandler:render_param_form(line_offset)
         -- Submit button
         local submit_content
         if self.state.is_executing then
-            submit_content = NuiLine():append("[ ", highlights.muted):append("Processing...", highlights.muted):append(
-                " ]", highlights.muted)
+            submit_content = NuiLine()
+                :append("[ ", highlights.muted)
+                :append("Processing...", highlights.muted)
+                :append(" ]", highlights.muted)
         else
-            submit_content = NuiLine():append("[ ", highlights.success_fill):append("Submit", highlights.success_fill)
+            submit_content = NuiLine()
+                :append("[ ", highlights.success_fill)
+                :append("Submit", highlights.success_fill)
                 :append(" ]", highlights.success_fill)
         end
-        vim.list_extend(lines, self:render_section_content({submit_content}, 2))
+        vim.list_extend(lines, self:render_section_content({ submit_content }, 2))
 
         -- Track submit line
         self:track_line(line_offset + #lines, "submit")
@@ -291,10 +306,9 @@ function ToolHandler:render_param_form(line_offset)
 
     -- Error message
     if self.state.error then
-        local error_line = NuiLine():append("⚠ ", highlights.error):append(self.state.error, highlights.error)
-        vim.list_extend(lines, self:render_section_content({error_line}, 2))
+        local error_lines = Text.multiline(self.state.error, highlights.error)
+        vim.list_extend(lines, self:render_section_content(error_lines, 2))
     end
-
     vim.list_extend(lines, self:render_section_end())
     return lines
 end

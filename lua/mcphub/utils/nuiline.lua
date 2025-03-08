@@ -1,6 +1,7 @@
 --[[ Adapted from nui.line by Munif Tanjim
 Source: https://github.com/MunifTanjim/nui.nvim/blob/main/lua/nui/line/init.lua
-License: MIT ]] local NuiText = require("mcphub.utils.nuitext")
+License: MIT ]]
+local NuiText = require("mcphub.utils.nuitext")
 
 local Line = {}
 Line.__index = Line
@@ -18,7 +19,7 @@ end
 ---@return NuiText|NuiLine
 function Line:append(content, highlight)
     local block = content
-    if (block == nil) then
+    if block == nil then
         return self
     end
     if type(block) == "string" then
@@ -72,11 +73,13 @@ function Line:render(bufnr, ns_id, linenr_start, linenr_end)
     local row_start = linenr_start - 1
     local row_end = linenr_end and linenr_end - 1 or row_start + 1
     local content = self:content()
+    --handle newlines
+    content = content:gsub("\n", "\\n")
 
     -- Clear existing content
-    vim.api.nvim_buf_set_lines(bufnr, row_start, row_end, false, {""})
+    vim.api.nvim_buf_set_lines(bufnr, row_start, row_end, false, { "" })
     -- Insert new content at column 0
-    vim.api.nvim_buf_set_text(bufnr, row_start, 0, row_start, 0, {content})
+    vim.api.nvim_buf_set_text(bufnr, row_start, 0, row_start, 0, { content })
     -- Highlight from column 0
     self:highlight(bufnr, ns_id, linenr_start, 0)
 end
@@ -147,11 +150,11 @@ end
 -- Create constructor
 local NuiLine = setmetatable({
     pad_text = Line.pad_text, -- Export static methods
-    join = Line.join
+    join = Line.join,
 }, {
     __call = function(_, ...)
         return new_line(...)
-    end
+    end,
 })
 
 return NuiLine
