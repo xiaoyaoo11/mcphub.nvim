@@ -1,4 +1,5 @@
 local Error = require("mcphub.errors")
+local ImageCache = require("mcphub.utils.image_cache")
 local Job = require("plenary.job")
 local MCPHub = require("mcphub.hub")
 local State = require("mcphub.state")
@@ -151,6 +152,9 @@ function M.setup(opts)
                 setup_state = true,
                 hub_instance = true,
             }, "setup")
+
+            -- Initialize image cache
+            ImageCache.setup()
 
             -- Start hub
             hub:start({

@@ -35,7 +35,7 @@ function ResourceTemplateHandler:execute()
     -- Access resource with user provided URI
     if State.hub_instance then
         State.hub_instance:access_resource(self.server_name, self.state.input_value, {
-            return_text = true,
+            parse_response = true,
             callback = function(response, err)
                 self:handle_response(response, err)
                 self.view:draw()

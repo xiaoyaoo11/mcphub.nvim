@@ -1,4 +1,5 @@
 local highlights = require("mcphub.utils.highlights").groups
+local ImageCache = require("mcphub.utils.image_cache")
 local NuiLine = require("mcphub.utils.nuiline")
 local Text = require("mcphub.utils.text")
 
@@ -8,7 +9,7 @@ local Text = require("mcphub.utils.text")
 ---@field state table Current state of the capability execution
 ---@field interactive_lines { line: number, type: string, context: any}[] List of interactive lines
 local CapabilityHandler = {
-    type = nil -- to be set by subclasses
+    type = nil, -- to be set by subclasses
 }
 CapabilityHandler.__index = CapabilityHandler
 
@@ -20,9 +21,9 @@ function CapabilityHandler:new(server_name, capability_info, view)
         state = {
             is_executing = false,
             result = nil,
-            error = nil
+            error = nil,
         },
-        interactive_lines = {}
+        interactive_lines = {},
     }, self)
     return handler
 end
@@ -32,7 +33,7 @@ end
 function CapabilityHandler:get_cursor_position()
     -- Default to first interactive line if any
     if #self.interactive_lines > 0 then
-        return {self.interactive_lines[1].line, 2}
+        return { self.interactive_lines[1].line, 2 }
     end
     return nil
 end
@@ -42,7 +43,7 @@ function CapabilityHandler:track_line(line_nr, type, context)
     table.insert(self.interactive_lines, {
         line = line_nr,
         type = type,
-        context = context
+        context = context,
     })
 end
 
@@ -69,14 +70,14 @@ function CapabilityHandler:handle_cursor_move(view, line)
     if type == "submit" and not self.state.is_executing then
         view.cursor_highlight = vim.api.nvim_buf_set_extmark(view.ui.buffer, view.hover_ns, line - 1, 0, {
             line_hl_group = highlights.active_item,
-            virt_text = {{"Press <CR> to submit", highlights.active_item_muted}},
-            virt_text_pos = "eol"
+            virt_text = { { "Press <CR> to submit", highlights.active_item_muted } },
+            virt_text_pos = "eol",
         })
     elseif type == "input" then
         view.cursor_highlight = vim.api.nvim_buf_set_extmark(view.ui.buffer, view.hover_ns, line - 1, 0, {
             line_hl_group = highlights.active_item,
-            virt_text = {{"Press <CR> to edit", highlights.active_item_muted}},
-            virt_text_pos = "eol"
+            virt_text = { { "Press <CR> to edit", highlights.active_item_muted } },
+            virt_text_pos = "eol",
         })
     end
 end
@@ -85,7 +86,7 @@ end
 function CapabilityHandler:handle_input(prompt, default, callback)
     vim.ui.input({
         prompt = prompt,
-        default = default or ""
+        default = default or "",
     }, function(input)
         if input ~= nil then -- Only handle if not cancelled
             callback(input)
@@ -96,8 +97,12 @@ end
 -- Common section rendering utilities
 function CapabilityHandler:render_section_start(title, highlight)
     local lines = {}
-    table.insert(lines, Text.pad_line(
-        NuiLine():append("╭─ ", highlights.muted):append(" " .. title .. " ", highlight or highlights.header)))
+    table.insert(
+        lines,
+        Text.pad_line(
+            NuiLine():append("╭─ ", highlights.muted):append(" " .. title .. " ", highlight or highlights.header)
+        )
+    )
     return lines
 end
 
@@ -117,7 +122,7 @@ function CapabilityHandler:render_section_content(content, indent_level)
 end
 
 function CapabilityHandler:render_section_end()
-    return {Text.pad_line(NuiLine():append("╰─", highlights.muted):append(" ", highlights.muted))}
+    return { Text.pad_line(NuiLine():append("╰─", highlights.muted):append(" ", highlights.muted)) }
 end
 
 -- Common result rendering
@@ -130,13 +135,31 @@ function CapabilityHandler:render_result()
     table.insert(lines, Text.pad_line(NuiLine())) -- Empty line
     vim.list_extend(lines, self:render_section_start("Result"))
 
-    local result_json = self.state.result
-    if type(result_json) == "table" then
-        result_json = vim.fn.json_encode(result_json)
+    -- Handle text content
+    if self.state.result.text and self.state.result.text ~= "" then
+        vim.list_extend(lines, self:render_section_content(Text.multiline(self.state.result.text, highlights.info), 1))
     end
 
-    for _, line in ipairs(Text.multiline(result_json, highlights.info)) do
-        vim.list_extend(lines, self:render_section_content({line}, 1))
+    -- Handle image content
+    if self.state.result.images and #self.state.result.images > 0 then
+        if #lines > 0 then
+            table.insert(lines, Text.pad_line(NuiLine())) -- Spacer
+        end
+        for i, img in ipairs(self.state.result.images) do
+            -- Save to temp file
+            local filepath = ImageCache.save_image(img.data, img.mimeType or "application/octet-stream")
+
+            -- Create filesystem URL
+            local url = "file://" .. filepath
+            -- Show friendly name with URL
+            local image_line = NuiLine()
+                :append("Image " .. i .. ": ", highlights.muted)
+                :append(" [", highlights.muted)
+                :append(url, highlights.link)
+                :append("]", highlights.muted)
+
+            vim.list_extend(lines, self:render_section_content({ image_line }, 1))
+        end
     end
 
     vim.list_extend(lines, self:render_section_end())

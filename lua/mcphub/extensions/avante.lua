@@ -135,21 +135,21 @@ function M.mcp_tool(mode, cwd)
 
             if params.action == "access_mcp_resource" then
                 local res, err = hub:access_resource(params.server_name, params.uri, {
-                    return_text = true,
+                    parse_response = true,
                 })
                 if err or not res then
                     return nil, err
                 elseif res then
-                    return res
+                    return res.text
                 end
             elseif params.action == "use_mcp_tool" then
                 local res, err = hub:call_tool(params.server_name, params.tool_name, params.arguments, {
-                    return_text = true,
+                    parse_response = true,
                 })
                 if err or not res then
                     return nil, err
                 elseif res then
-                    return res
+                    return res.text
                 end
             else
                 return nil, "Invalid action type"

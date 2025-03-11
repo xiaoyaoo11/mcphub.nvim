@@ -56,7 +56,8 @@ function M.get_use_mcp_tool_prompt(example)
 </arguments>
 </use_mcp_tool>]]
 
-    return string.format([[
+    return string.format(
+        [[
 ## use_mcp_tool
 
 Description: Request to use a tool provided by a connected MCP server. Each MCP server can provide multiple tools with different capabilities. Tools have defined input schemas that specify required and optional parameters.
@@ -67,7 +68,9 @@ Parameters:
 
 Example: Requesting to use an MCP tool
 
-%s]], example or default_example)
+%s]],
+        example or default_example
+    )
 end
 
 --- Get the access_mcp_resource section of the prompt
@@ -79,7 +82,8 @@ function M.get_access_mcp_resource_prompt(example)
 <uri>weather://san-francisco/current</uri>
 </access_mcp_resource>]]
 
-    return string.format([[
+    return string.format(
+        [[
 ## access_mcp_resource
 
 Description: Request to access a resource provided by a connected MCP server. Resources represent data sources that can be used as context, such as files, API responses, or system information.
@@ -89,7 +93,9 @@ Parameters:
 
 Example: Requesting to access an MCP resource
 
-%s]], example or default_example)
+%s]],
+        example or default_example
+    )
 end
 
 function M.get_active_servers_prompt(servers)
@@ -99,12 +105,18 @@ function M.get_active_servers_prompt(servers)
         return prompt .. "\n\n(No MCP servers connected)"
     end
 
-    prompt = prompt .. "\n\nWhen a server is connected, you can use the server's tools via the `use_mcp_tool` tool, " ..
-                 "and access the server's resources via the `access_mcp_resource` tool."
+    prompt = prompt
+        .. "\n\nWhen a server is connected, you can use the server's tools via the `use_mcp_tool` tool, "
+        .. "and access the server's resources via the `access_mcp_resource` tool."
 
     for _, server in ipairs(servers) do
-        if server.capabilities and ((server.capabilities.tools and #server.capabilities.tools > 0) or
-            (server.capabilities.resources and #server.capabilities.resources > 0)) then
+        if
+            server.capabilities
+            and (
+                (server.capabilities.tools and #server.capabilities.tools > 0)
+                or (server.capabilities.resources and #server.capabilities.resources > 0)
+            )
+        then
             -- Add server section
             prompt = prompt .. string.format("\n\n## %s", server.name)
             prompt = prompt .. format_tools(server.capabilities.tools)
@@ -117,61 +129,63 @@ end
 
 function M.parse_tool_response(response)
     if response == nil then
-        return ""
+        return { text = "", images = {} }
     end
+
     local result = response.result or {}
-    local output = ""
+    local output = { text = "", images = {} }
+    local images = {}
+    local texts = {}
+
     -- parse tool response
-    local isError = result.isError or false
-    local content = {}
     for _, v in ipairs(result.content or {}) do
         local type = v.type
-        -- TODO:handle other types
         if type == "text" then
-            table.insert(content, string.format([[<text>
-%s
-</text>]], v.text))
+            table.insert(texts, v.text)
+        elseif type == "image" then
+            table.insert(images, {
+                data = v.data,
+                mimeType = v.mimeType or "application/octet-stream",
+            })
         end
-        output = string.format([[<content>
-%s
-</content>]], table.concat(content, "\n"))
-        if isError then
-            output = string.format('The tool run failed with error.\n%s', output)
-        end
-        output = string.format([[<result>
-%s
-</result>]], output)
     end
+
+    -- Combine all text with newlines
+    output.text = table.concat(texts, "\n")
+    if result.isError then
+        output.text = "The tool run failed with error.\n" .. output.text
+    end
+    output.images = images
+
     return output
 end
 
 function M.parse_resource_response(response)
     if response == nil then
-        return ""
+        return { text = "", images = {} }
     end
+
     local result = response.result or {}
-    local output = ""
-    local contents = {}
-    for _, v in ipairs(result.contents or {}) do
-        local uri = v.uri or ""
-        local text = v.text or ""
-        local mimeType = v.mimeType or ""
-        table.insert(contents, string.format([[
-<resource>
-<uri>%s</uri>
-<text>%s</text>
-</resource>
-]], uri, text))
+    local output = { text = "", images = {} }
+    local images = {}
+    local texts = {}
+
+    for _, content in ipairs(result.contents or {}) do
+        -- If it has a blob, treat as image
+        if content.blob then
+            table.insert(images, {
+                data = content.blob,
+                mimeType = content.mimeType or "application/octet-stream",
+            })
+        -- Otherwise treat as text
+        elseif content.text then
+            table.insert(texts, string.format("Resource %s:\n%s", content.uri, content.text))
+        end
     end
-    output = string.format([[
-<contents>
-%s
-</contents>
-]], table.concat(contents, "\n"))
-    output = string.format([[
-<result>
-%s
-</result>]], output)
+
+    output.text = table.concat(texts, "\n\n")
+    output.images = images
+
     return output
 end
 

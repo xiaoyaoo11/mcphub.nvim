@@ -32,7 +32,7 @@ function ResourceHandler:execute()
     -- Access resource
     if State.hub_instance then
         State.hub_instance:access_resource(self.server_name, self.info.uri, {
-            return_text = true,
+            parse_response = true,
             callback = function(response, err)
                 self:handle_response(response, err)
                 self.view:draw()
@@ -62,6 +62,7 @@ function ResourceHandler:render(line_offset)
     local details = {
         NuiLine():append("Name: ", highlights.muted):append(self.info.name, highlights.success),
         NuiLine():append("Type: ", highlights.muted):append(self.info.mimeType or "unknown", highlights.info),
+        NuiLine():append("URI: ", highlights.muted):append(self.info.uri, highlights.link),
     }
 
     vim.list_extend(lines, self:render_section_content(details, 2))

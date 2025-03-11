@@ -1,4 +1,5 @@
---[[ MCPHub highlight utilities ]] local M = {}
+--[[ MCPHub highlight utilities ]]
+local M = {}
 
 -- Highlight group names
 M.groups = {
@@ -18,7 +19,8 @@ M.groups = {
     window_normal = "MCPHubNormal",
     window_border = "MCPHubBorder",
     active_item = "MCPHubActiveItem",
-    active_item_muted = "MCPHubActiveItemMuted"
+    active_item_muted = "MCPHubActiveItemMuted",
+    link = "MCPHubLink",
 }
 
 -- Setup highlight groups
@@ -27,86 +29,91 @@ function M.setup()
         -- Window elements
         [M.groups.window_normal] = {
             bg = "#1a1b26",
-            fg = "#c0caf5"
+            fg = "#c0caf5",
         },
         [M.groups.window_border] = {
             bg = "NONE",
             fg = "#555555", -- Dark gray for border
-            special = "#555555" -- Match border char color
+            special = "#555555", -- Match border char color
         },
 
         -- Title and headers
         [M.groups.title] = {
             bg = "NONE",
             fg = "#c792ea", -- Purple for titles
-            bold = true
+            bold = true,
         },
         [M.groups.header] = {
             bg = "#444444",
-            fg = "#d4d4d4" -- Light gray for normal text
+            fg = "#d4d4d4", -- Light gray for normal text
         },
         [M.groups.header_btn] = {
             fg = "#222222",
             bg = "#c792ea",
-            bold = true
+            bold = true,
         },
         [M.groups.header_accent] = {
             bg = "#333333",
             fg = "#c792ea", -- Purple for accents
-            bold = true
+            bold = true,
         },
         [M.groups.header_btn_shortcut] = {
             bg = "#c792ea",
             fg = "#111111",
-            bold = true
+            bold = true,
         },
         [M.groups.header_shortcut] = {
             bg = "#444444",
             fg = "#ff966c", -- Orange for shortcuts
-            bold = true
+            bold = true,
         },
 
         -- Interactive elements
         [M.groups.active_item] = {
             fg = "#111111",
             bg = "#89d185",
-            bold = true
+            bold = true,
         },
         -- Interactive elements
         [M.groups.active_item_muted] = {
             bg = "#89d185",
             fg = "#555555",
-            bold = true
+            bold = true,
         },
         -- Status and messages
         [M.groups.error] = {
             bg = "NONE",
-            fg = "#f44747" -- Red for errors
+            fg = "#f44747", -- Red for errors
         },
         [M.groups.warning] = {
             bg = "NONE",
-            fg = "#ff8800" -- Orange for warnings
+            fg = "#ff8800", -- Orange for warnings
         },
         [M.groups.info] = {
             bg = "NONE",
-            fg = "#4fc1ff" -- Light blue for info
+            fg = "#4fc1ff", -- Light blue for info
         },
         [M.groups.success] = {
             bg = "NONE",
-            fg = "#89d185" -- Green for success
+            fg = "#89d185", -- Green for success
         },
         [M.groups.success_fill] = {
             bg = "#89d185",
-            fg = "#1a1b26"
+            fg = "#1a1b26",
         },
         [M.groups.muted] = {
             bg = "NONE",
-            fg = "#808080" -- Gray for muted text
+            fg = "#808080", -- Gray for muted text
         },
         [M.groups.keymap] = {
             bg = "NONE",
-            fg = "#c0caf5" -- Light blue for keymaps
-        }
+            fg = "#c0caf5", -- Light blue for keymaps
+        },
+        [M.groups.link] = {
+            bg = "NONE",
+            fg = "#4fc1ff", -- Light blue for links
+            underline = true, -- Underline to indicate clickable
+        },
     }
 
     -- -- Clear any existing highlights
