@@ -1,6 +1,6 @@
-local log = require("mcphub.utils.log")
 local Error = require("mcphub.errors")
 local State = require("mcphub.state")
+local log = require("mcphub.utils.log")
 
 local M = {}
 
@@ -15,7 +15,7 @@ M.TypeHandlers = {
     end,
     format = function()
       return "string"
-    end
+    end,
   },
   number = {
     validate = function(value)
@@ -26,7 +26,7 @@ M.TypeHandlers = {
     end,
     format = function()
       return "number"
-    end
+    end,
   },
   integer = {
     validate = function(value)
@@ -38,7 +38,7 @@ M.TypeHandlers = {
     end,
     format = function()
       return "integer"
-    end
+    end,
   },
   boolean = {
     validate = function(value)
@@ -49,7 +49,7 @@ M.TypeHandlers = {
     end,
     format = function()
       return "boolean"
-    end
+    end,
   },
   object = {
     validate = function(value, schema)
@@ -70,7 +70,7 @@ M.TypeHandlers = {
         return string.format("{%s}", table.concat(props, ", "))
       end
       return "object"
-    end
+    end,
   },
   array = {
     validate = function(value, schema)
@@ -104,16 +104,22 @@ M.TypeHandlers = {
     format = function(schema)
       if schema.items then
         if schema.items.enum then
-          return string.format("[%s]", table.concat(vim.tbl_map(function(v)
-            return string.format("%q", v)
-          end, schema.items.enum), ", "))
+          return string.format(
+            "[%s]",
+            table.concat(
+              vim.tbl_map(function(v)
+                return string.format("%q", v)
+              end, schema.items.enum),
+              ", "
+            )
+          )
         elseif schema.items.type then
           return string.format("%s[]", M.TypeHandlers[schema.items.type].format(schema.items))
         end
       end
       return "array"
-    end
-  }
+    end,
+  },
 }
 
 -- Process handlers for server process
@@ -133,10 +139,10 @@ M.ProcessHandlers = {
     if not ok then
       -- Not JSON, treat as raw log
       State:add_server_output({
-        type = "info",              -- Default to info for non-JSON messages
+        type = "info", -- Default to info for non-JSON messages
         message = data,
         timestamp = vim.loop.now(), -- Use system time if no timestamp
-        data = nil
+        data = nil,
       })
       return data
     end
@@ -160,13 +166,12 @@ M.ProcessHandlers = {
         message = parsed.message,
         code = parsed.code,
         timestamp = timestamp,
-        data = parsed.data
+        data = parsed.data,
       })
 
       -- Special error handling
       if parsed.type == "error" then
-        local error_obj = Error("SERVER", parsed.code or Error.Types.SERVER.CONNECTION, parsed.message,
-          parsed.data)
+        local error_obj = Error("SERVER", parsed.code or Error.Types.SERVER.CONNECTION, parsed.message, parsed.data)
         State:add_error(error_obj)
         -- log.error(tostring(error_obj))
         hub:handle_server_error(tostring(error_obj), opts)
@@ -177,19 +182,32 @@ M.ProcessHandlers = {
       log[parsed.type]({
         code = parsed.code or "SERVER_" .. string.upper(parsed.type),
         message = parsed.message,
-        data = parsed.data
+        data = parsed.data,
       })
 
       -- Handle ready state (backward compatibility)
-      if parsed.type == "info" and parsed.message == "MCP_HUB_STARTED" and parsed.data and parsed.data.status ==
-          "ready" then
+      if
+        parsed.type == "info"
+        and parsed.message == "MCP_HUB_STARTED"
+        and parsed.data
+        and parsed.data.status == "ready"
+      then
         hub:handle_server_ready(opts)
+        return true
+      end
+
+      --Handle hub updates "MCP_HUB_UPDATED"
+      --
+
+      -- Handle tool/resourcelist updates
+      if parsed.type == "info" and (parsed.code == "TOOL_LIST_CHANGED" or parsed.code == "RESOURCE_LIST_CHANGED") then
+        hub:handle_capability_updates(parsed.data)
         return true
       end
     end
 
     return true
-  end
+  end,
 }
 
 --- API response handlers
@@ -226,17 +244,22 @@ M.ResponseHandlers = {
     if response.exit ~= 0 then
       local error_code = ({
         [7] = Error.Types.SERVER.CONNECTION,
-        [28] = Error.Types.SERVER.TIMEOUT
+        [28] = Error.Types.SERVER.TIMEOUT,
       })[response.exit] or Error.Types.SERVER.CURL_ERROR
 
       local error_msg = ({
         [7] = "Connection refused - Server not running",
-        [28] = "Request timed out"
+        [28] = "Request timed out",
       })[response.exit] or string.format("Request failed (code %d)", response.exit or 0)
 
-      return Error("SERVER", error_code, error_msg, vim.tbl_extend("force", context, {
-        exit_code = response.exit
-      }))
+      return Error(
+        "SERVER",
+        error_code,
+        error_msg,
+        vim.tbl_extend("force", context, {
+          exit_code = response.exit,
+        })
+      )
     end
 
     return nil
@@ -253,15 +276,23 @@ M.ResponseHandlers = {
 
     local ok, parsed_error = pcall(vim.fn.json_decode, response.body)
     if ok and parsed_error.error then
-      return Error("SERVER", parsed_error.code or Error.Types.SERVER.API_ERROR, parsed_error.error,
-        parsed_error.data or {})
+      return Error(
+        "SERVER",
+        parsed_error.code or Error.Types.SERVER.API_ERROR,
+        parsed_error.error,
+        parsed_error.data or {}
+      )
     end
 
-    return Error("SERVER", Error.Types.SERVER.API_ERROR, string.format("Server error (%d)", response.status),
+    return Error(
+      "SERVER",
+      Error.Types.SERVER.API_ERROR,
+      string.format("Server error (%d)", response.status),
       vim.tbl_extend("force", context, {
         status = response.status,
-        body = response.body
-      }))
+        body = response.body,
+      })
+    )
   end,
 
   --- Parse JSON response
@@ -277,14 +308,18 @@ M.ResponseHandlers = {
     local ok, decoded = pcall(vim.fn.json_decode, response)
     if not ok then
       return nil,
-          Error("SERVER", Error.Types.SERVER.API_ERROR, "Invalid response: Not JSON",
-            vim.tbl_extend("force", context, {
-              body = response
-            }))
+        Error(
+          "SERVER",
+          Error.Types.SERVER.API_ERROR,
+          "Invalid response: Not JSON",
+          vim.tbl_extend("force", context, {
+            body = response,
+          })
+        )
     end
 
     return decoded, nil
-  end
+  end,
 }
 
 return M
