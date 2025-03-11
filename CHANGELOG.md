@@ -2,6 +2,41 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.0] - 2025-03-11
+
+### Breaking Changes
+
+- Replaced return_text parameter with parse_response in tool/resource calls
+  - Now returns a table with text and images instead of plain text
+  - Affects both synchronous and asynchronous operations
+  - CodeCompanion and Avante integrations updated to support new format
+
+### Added
+
+- Image support for tool and resource responses
+  - Automatic image caching system (temporary until Neovim exits)
+  - File URL generation for image previews using gx
+  - New image_cache utility module
+- Real-time capability updates
+  - Automatic UI refresh when tools or resources change
+  - State synchronization with server changes
+  - Enhanced server monitoring
+- Improved result preview system
+  - Better visualization of tool and resource responses
+  - Added link highlighting support
+  - Enhanced text formatting
+
+### Changed
+
+- Enhanced tool and resource response handling
+  - More structured response format
+  - Better support for different content types
+  - Improved error reporting
+- Updated integration dependencies
+  - CodeCompanion updated to support new response format
+  - Avante integration adapted for new capabilities
+- Required mcp-hub version updated to 1.6.0
+
 ## [2.2.0] - 2025-03-08
 
 ### Added
