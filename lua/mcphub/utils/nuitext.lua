@@ -1,6 +1,7 @@
 --[[ Adapted from nui.text by Munif Tanjim
 Source: https://github.com/MunifTanjim/nui.nvim/blob/main/lua/nui/text/init.lua
-License: MIT ]] local Object = {}
+License: MIT ]]
+local Object = {}
 Object.__index = Object
 
 ---@class nui_text_extmark
@@ -35,7 +36,7 @@ function Text:set(content, extmark)
         -- preserve self.extmark.id
         local id = self.extmark and self.extmark.id or nil
         self.extmark = type(extmark) == "string" and {
-            hl_group = extmark
+            hl_group = extmark,
         } or vim.deepcopy(extmark)
         self.extmark.id = id
     end
@@ -91,9 +92,9 @@ function Text:render(bufnr, ns_id, linenr_start, byte_start, linenr_end, byte_en
     local content = self:content()
 
     -- Clear existing content first
-    vim.api.nvim_buf_set_text(bufnr, row_start, col_start, row_end, col_start, {""})
+    vim.api.nvim_buf_set_text(bufnr, row_start, col_start, row_end, col_start, { "" })
     -- Insert new content
-    vim.api.nvim_buf_set_text(bufnr, row_start, col_start, row_start, col_start, {content})
+    vim.api.nvim_buf_set_text(bufnr, row_start, col_start, row_start, col_start, { content })
 
     -- Highlight from col_start
     self:highlight(bufnr, ns_id, linenr_start, col_start)
@@ -105,7 +106,7 @@ local NuiText = setmetatable({}, {
         local instance = setmetatable({}, Object)
         instance:init(content, extmark)
         return instance
-    end
+    end,
 })
 
 return NuiText

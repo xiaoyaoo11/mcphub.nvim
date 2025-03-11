@@ -18,14 +18,14 @@ function M.validate_setup_opts(opts)
     if not opts.port then
         return {
             ok = false,
-            error = Error("SETUP", Error.Types.SETUP.INVALID_PORT, "Port is required for MCPHub setup")
+            error = Error("SETUP", Error.Types.SETUP.INVALID_PORT, "Port is required for MCPHub setup"),
         }
     end
 
     if not opts.config then
         return {
             ok = false,
-            error = Error("SETUP", Error.Types.SETUP.INVALID_CONFIG, "Config file path is required")
+            error = Error("SETUP", Error.Types.SETUP.INVALID_CONFIG, "Config file path is required"),
         }
     end
 
@@ -36,7 +36,7 @@ function M.validate_setup_opts(opts)
     end
 
     return {
-        ok = true
+        ok = true,
     }
 end
 
@@ -47,14 +47,14 @@ function M.validate_config_file(path)
     if not path then
         return {
             ok = false,
-            error = Error("SETUP", Error.Types.SETUP.INVALID_CONFIG, "Config file path is required")
+            error = Error("SETUP", Error.Types.SETUP.INVALID_CONFIG, "Config file path is required"),
         }
     end
     local file = io.open(path, "r")
     if not file then
         return {
             ok = false,
-            error = Error("SETUP", Error.Types.SETUP.INVALID_CONFIG, string.format("Config file not found: %s", path))
+            error = Error("SETUP", Error.Types.SETUP.INVALID_CONFIG, string.format("Config file not found: %s", path)),
         }
     end
 
@@ -66,10 +66,14 @@ function M.validate_config_file(path)
         return {
             ok = false,
             content = content,
-            error = Error("SETUP", Error.Types.SETUP.INVALID_CONFIG,
-                string.format("Invalid JSON in config file: %s", path), {
-                    parse_error = json
-                })
+            error = Error(
+                "SETUP",
+                Error.Types.SETUP.INVALID_CONFIG,
+                string.format("Invalid JSON in config file: %s", path),
+                {
+                    parse_error = json,
+                }
+            ),
         }
     end
 
@@ -77,8 +81,11 @@ function M.validate_config_file(path)
         return {
             ok = false,
             content = content,
-            error = Error("SETUP", Error.Types.SETUP.INVALID_CONFIG,
-                string.format("Config file must contain 'mcpServers' object: %s", path))
+            error = Error(
+                "SETUP",
+                Error.Types.SETUP.INVALID_CONFIG,
+                string.format("Config file must contain 'mcpServers' object: %s", path)
+            ),
         }
     end
 
@@ -89,8 +96,11 @@ function M.validate_config_file(path)
                 return {
                     ok = false,
                     content = content,
-                    error = Error("SETUP", Error.Types.SETUP.INVALID_CONFIG,
-                        string.format("disabled_tools must be an array in server %s", server_name))
+                    error = Error(
+                        "SETUP",
+                        Error.Types.SETUP.INVALID_CONFIG,
+                        string.format("disabled_tools must be an array in server %s", server_name)
+                    ),
                 }
             end
             -- Validate each tool name is a string
@@ -99,8 +109,11 @@ function M.validate_config_file(path)
                     return {
                         ok = false,
                         content = content,
-                        error = Error("SETUP", Error.Types.SETUP.INVALID_CONFIG, string.format(
-                            "disabled_tools must contain non-empty strings in server %s", server_name))
+                        error = Error(
+                            "SETUP",
+                            Error.Types.SETUP.INVALID_CONFIG,
+                            string.format("disabled_tools must contain non-empty strings in server %s", server_name)
+                        ),
                     }
                 end
             end
@@ -110,7 +123,7 @@ function M.validate_config_file(path)
     return {
         ok = true,
         json = json,
-        content = content
+        content = content,
     }
 end
 
@@ -123,32 +136,36 @@ function M.validate_version(ver_str)
         return {
             ok = false,
             error = Error("SETUP", Error.Types.SETUP.VERSION_MISMATCH, "Invalid version format", {
-                version = ver_str
-            })
+                version = ver_str,
+            }),
         }
     end
 
     local current = {
         major = tonumber(major),
         minor = tonumber(minor),
-        patch = tonumber(patch)
+        patch = tonumber(patch),
     }
 
     local required = version.REQUIRED_NODE_VERSION
     if current.major ~= required.major or current.minor < required.minor then
         return {
             ok = false,
-            error = Error("SETUP", Error.Types.SETUP.VERSION_MISMATCH, string.format(
-                "Incompatible mcp-hub version. Found %s, required %s", ver_str, required.string), {
-                found = ver_str,
-                required = required.string,
-                install_cmd = string.format("npm install -g mcp-hub@%s", required.string)
-            })
+            error = Error(
+                "SETUP",
+                Error.Types.SETUP.VERSION_MISMATCH,
+                string.format("Incompatible mcp-hub version. Found %s, required %s", ver_str, required.string),
+                {
+                    found = ver_str,
+                    required = required.string,
+                    install_cmd = string.format("npm install -g mcp-hub@%s", required.string),
+                }
+            ),
         }
     end
 
     return {
-        ok = true
+        ok = true,
     }
 end
 

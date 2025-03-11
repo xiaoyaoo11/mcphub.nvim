@@ -527,15 +527,12 @@ function MCPHub:handle_capability_updates(data)
             elseif data.type == "RESOURCE" then
                 s.capabilities.resources = data.resources or {}
                 s.capabilities.resourceTemplates = data.resourceTemplates or {}
-                State:emit(
-                    "resource_list_changed",
-                    {
-                        server = data.server,
-                        hub = self,
-                        resources = data.resources,
-                        resourceTemplates = data.resourceTemplates,
-                    }
-                )
+                State:emit("resource_list_changed", {
+                    server = data.server,
+                    hub = self,
+                    resources = data.resources,
+                    resourceTemplates = data.resourceTemplates,
+                })
             end
             break
         end

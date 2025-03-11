@@ -2,14 +2,14 @@
 --- Help view for MCPHub UI
 --- Shows plugin documentation and keybindings
 ---@brief ]]
-local View = require("mcphub.ui.views.base")
-local Text = require("mcphub.utils.text")
 local NuiLine = require("mcphub.utils.nuiline")
+local Text = require("mcphub.utils.text")
+local View = require("mcphub.ui.views.base")
 
 ---@class HelpView
 ---@field super View
 local HelpView = setmetatable({}, {
-    __index = View
+    __index = View,
 })
 HelpView.__index = HelpView
 
@@ -56,28 +56,35 @@ function HelpView:render_navigation()
     local lines = {}
     table.insert(lines, Text.pad_line(" Views & Navigation ", Text.highlights.header))
 
-    local nav_items = {{
-        key = "H",
-        name = "Home",
-        desc = "Server status and overview"
-    }, {
-        key = "C",
-        name = "Config",
-        desc = "Server configuration"
-    }, {
-        key = "L",
-        name = "Logs",
-        desc = "Server and plugin logs"
-    }, {
-        key = "?",
-        name = "Help",
-        desc = "This help information"
-    }}
+    local nav_items = {
+        {
+            key = "H",
+            name = "Home",
+            desc = "Server status and overview",
+        },
+        {
+            key = "C",
+            name = "Config",
+            desc = "Server configuration",
+        },
+        {
+            key = "L",
+            name = "Logs",
+            desc = "Server and plugin logs",
+        },
+        {
+            key = "?",
+            name = "Help",
+            desc = "This help information",
+        },
+    }
 
     for _, item in ipairs(nav_items) do
         -- View name and shortcut
-        local name_line = NuiLine():append(" " .. item.key .. " ", Text.highlights.header_shortcut):append(" - ",
-            Text.highlights.muted):append(item.name, Text.highlights.success)
+        local name_line = NuiLine()
+            :append(" " .. item.key .. " ", Text.highlights.header_shortcut)
+            :append(" - ", Text.highlights.muted)
+            :append(item.name, Text.highlights.success)
         table.insert(lines, Text.pad_line(name_line))
 
         -- View description

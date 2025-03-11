@@ -2,17 +2,17 @@
 --- Logs view for MCPHub UI
 --- Shows server output and errors
 ---@brief ]]
-local State = require("mcphub.state")
-local View = require("mcphub.ui.views.base")
-local Text = require("mcphub.utils.text")
 local NuiLine = require("mcphub.utils.nuiline")
+local State = require("mcphub.state")
+local Text = require("mcphub.utils.text")
+local View = require("mcphub.ui.views.base")
 local renderer = require("mcphub.utils.renderer")
 
 ---@class LogsView
 ---@field super View
 ---@field active_tab "logs"|"issues" Currently active tab
 local LogsView = setmetatable({}, {
-    __index = View
+    __index = View,
 })
 LogsView.__index = LogsView
 
@@ -23,13 +23,16 @@ function LogsView:new(ui)
 end
 
 function LogsView:render_tabs()
-    local tabs = {{
-        text = "Server Logs",
-        selected = self.active_tab == "logs"
-    }, {
-        text = "Issues",
-        selected = self.active_tab == "issues"
-    }}
+    local tabs = {
+        {
+            text = "Server Logs",
+            selected = self.active_tab == "logs",
+        },
+        {
+            text = "Issues",
+            selected = self.active_tab == "issues",
+        },
+    }
     return Text.create_tab_bar(tabs, self:get_width())
 end
 
@@ -43,7 +46,7 @@ function LogsView:before_enter()
                 self.active_tab = self.active_tab == "logs" and "issues" or "logs"
                 self:draw()
             end,
-            desc = "Switch tab"
+            desc = "Switch tab",
         },
         ["x"] = {
             action = function()
@@ -54,8 +57,8 @@ function LogsView:before_enter()
                 end
                 self:draw()
             end,
-            desc = "Clear current tab"
-        }
+            desc = "Clear current tab",
+        },
     }
 end
 

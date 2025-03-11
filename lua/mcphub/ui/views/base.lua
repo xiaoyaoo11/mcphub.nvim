@@ -2,14 +2,14 @@
 --- Base view for MCPHub UI
 --- Provides common view functionality and base for view inheritance
 ---@brief ]]
+local NuiLine = require("mcphub.utils.nuiline")
 local State = require("mcphub.state")
 local Text = require("mcphub.utils.text")
-local NuiLine = require("mcphub.utils.nuiline")
 local ns_id = vim.api.nvim_create_namespace("MCPHub")
 local renderer = require("mcphub.utils.renderer")
 
 local VIEW_TYPES = {
-    SETUP_INDEPENDENT = {"logs", "help", "config"}
+    SETUP_INDEPENDENT = { "logs", "help", "config" },
 }
 
 ---@class View
@@ -35,7 +35,7 @@ function View:new(ui, name)
         interactive_lines = {},
         hover_ns = vim.api.nvim_create_namespace("MCPHub" .. name .. "Hover"),
         cursor_highlight = nil,
-        cursor_group = nil
+        cursor_group = nil,
     }
     return setmetatable(instance, self)
 end
@@ -72,7 +72,7 @@ function View:set_cursor(pos, opts)
     end
     -- Ensure line is within bounds
     local line_count = vim.api.nvim_buf_line_count(self.ui.buffer)
-    local new_pos = {math.min(cursor[1], line_count), cursor[2]}
+    local new_pos = { math.min(cursor[1], line_count), cursor[2] }
     -- Set cursor
     vim.api.nvim_win_set_cursor(self.ui.window, new_pos)
 end
@@ -84,7 +84,7 @@ end
 function View:add_keymap(key, action, desc)
     self.keymaps[key] = {
         action = action,
-        desc = desc
+        desc = desc,
     }
 end
 
@@ -95,10 +95,10 @@ function View:apply_keymaps()
 
     -- Apply view's registered keymaps
     for key, map in pairs(self.keymaps) do
-        vim.keymap.set('n', key, map.action, {
+        vim.keymap.set("n", key, map.action, {
             buffer = buffer,
             desc = map.desc,
-            nowait = true
+            nowait = true,
         })
         table.insert(self.active_keymaps, key)
     end
@@ -106,8 +106,8 @@ end
 
 function View:clear_keymaps()
     for _, key in ipairs(self.active_keymaps) do
-        pcall(vim.keymap.del, 'n', key, {
-            buffer = self.ui.buffer
+        pcall(vim.keymap.del, "n", key, {
+            buffer = self.ui.buffer,
         })
     end
     self.active_keymaps = {} -- Clear the active keymaps array after deletion
@@ -130,34 +130,33 @@ function View:restore_cursor_position()
     local line_count = vim.api.nvim_buf_line_count(self.ui.buffer)
     if saved_pos then
         -- Ensure position is valid
-        local new_pos = {math.min(saved_pos[1], line_count), saved_pos[2]}
+        local new_pos = { math.min(saved_pos[1], line_count), saved_pos[2] }
         vim.api.nvim_win_set_cursor(0, new_pos)
     else
         -- Use initial position if no saved position
         local initial_line = self:get_initial_cursor_position()
         if initial_line then
-            local new_pos = {math.min(initial_line, line_count), 2}
+            local new_pos = { math.min(initial_line, line_count), 2 }
             vim.api.nvim_win_set_cursor(0, new_pos)
         end
     end
 end
 
 --- Called before view is drawn (override in child views)
-function View:before_enter()
-end
+function View:before_enter() end
 
 --- Called after view is drawn and applied
 function View:after_enter()
     -- Add cursor movement autocmd
     self.cursor_group = vim.api.nvim_create_augroup("MCPHub" .. self.name .. "Cursor", {
-        clear = true
+        clear = true,
     })
     vim.api.nvim_create_autocmd("CursorMoved", {
         group = self.cursor_group,
         buffer = self.ui.buffer,
         callback = function()
             self:handle_cursor_move()
-        end
+        end,
     })
 
     self:apply_keymaps()
@@ -191,7 +190,7 @@ function View:track_line(line_nr, type, context)
     table.insert(self.interactive_lines, {
         line = line_nr,
         type = type,
-        context = context
+        context = context,
     })
 end
 
@@ -224,8 +223,8 @@ function View:handle_cursor_move()
     if type then
         -- Add virtual text without line highlight
         self.cursor_highlight = vim.api.nvim_buf_set_extmark(self.ui.buffer, self.hover_ns, line - 1, 0, {
-            virt_text = {{context and context.hint or "Press <CR> to interact", Text.highlights.muted}},
-            virt_text_pos = "eol"
+            virt_text = { { context and context.hint or "Press <CR> to interact", Text.highlights.muted } },
+            virt_text_pos = "eol",
         })
     end
 end
@@ -325,13 +324,13 @@ function View:render_footer()
     for key, map in pairs(self.keymaps or {}) do
         table.insert(key_items, {
             key = key,
-            desc = map.desc
+            desc = map.desc,
         })
     end
 
     table.insert(key_items, {
         key = "r",
-        desc = "Refresh"
+        desc = "Refresh",
     })
     -- table.insert(key_items, {
     --     key = "R",
@@ -340,7 +339,7 @@ function View:render_footer()
     -- Add common close
     table.insert(key_items, {
         key = "q",
-        desc = "Close"
+        desc = "Close",
     })
 
     -- Format in a single line
@@ -349,7 +348,9 @@ function View:render_footer()
         if i > 1 then
             keys_line:append("  ", Text.highlights.muted)
         end
-        keys_line:append(" " .. key.key .. " ", Text.highlights.header_shortcut):append(" ", Text.highlights.muted)
+        keys_line
+            :append(" " .. key.key .. " ", Text.highlights.header_shortcut)
+            :append(" ", Text.highlights.muted)
             :append(key.desc, Text.highlights.muted)
     end
 

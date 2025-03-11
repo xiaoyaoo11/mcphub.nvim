@@ -18,20 +18,20 @@ Error.Types = {
         INVALID_PORT = "INVALID_PORT",
         MISSING_DEPENDENCY = "MISSING_DEPENDENCY",
         VERSION_MISMATCH = "VERSION_MISMATCH",
-        SERVER_START = "SERVER_START"
+        SERVER_START = "SERVER_START",
     },
     SERVER = {
         CONNECTION = "CONNECTION",
         HEALTH_CHECK = "HEALTH_CHECK",
         API_ERROR = "API_ERROR",
         CURL_ERROR = "CURL_ERROR",
-        TIMEOUT = "TIMEOUT"
+        TIMEOUT = "TIMEOUT",
     },
     RUNTIME = {
         INVALID_STATE = "INVALID_STATE",
         RESOURCE_ERROR = "RESOURCE_ERROR",
-        OPERATION_FAILED = "OPERATION_FAILED"
-    }
+        OPERATION_FAILED = "OPERATION_FAILED",
+    },
 }
 
 --- Create a new error instance
@@ -46,7 +46,7 @@ function Error.init(type, code, message, details)
         code = code,
         message = message,
         details = details or {},
-        timestamp = vim.loop.now()
+        timestamp = vim.loop.now(),
     }, Error)
 end
 
@@ -63,7 +63,7 @@ end
 setmetatable(Error, {
     __call = function(_, ...)
         return Error.init(...)
-    end
+    end,
 })
 
 return Error

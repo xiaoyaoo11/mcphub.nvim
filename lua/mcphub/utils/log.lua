@@ -9,7 +9,7 @@ local config = {
     level = vim.log.levels.ERROR,
     to_file = false,
     file_path = nil,
-    prefix = "MCPHub"
+    prefix = "MCPHub",
 }
 
 --- Setup logger configuration
@@ -83,7 +83,7 @@ local function log_internal(msg, level)
         [vim.log.levels.DEBUG] = "debug",
         [vim.log.levels.INFO] = "info",
         [vim.log.levels.WARN] = "warn",
-        [vim.log.levels.ERROR] = "error"
+        [vim.log.levels.ERROR] = "error",
     })[level] or "unknown"
 
     local formatted = format_message(msg, level_str:upper())

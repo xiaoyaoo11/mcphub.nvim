@@ -1,7 +1,7 @@
-local Text = require("mcphub.utils.text")
 local NuiLine = require("mcphub.utils.nuiline")
-local utils = require("mcphub.utils")
 local State = require("mcphub.state")
+local Text = require("mcphub.utils.text")
+local utils = require("mcphub.utils")
 
 local M = {}
 
@@ -15,12 +15,12 @@ function M.get_server_status_info(status, expanded)
             connecting = "◉ ",
             disconnecting = "○ ",
             disconnected = "○ ",
-            disabled = "○ "
+            disabled = "○ ",
         })[status] or "⚠ ",
 
         desc = ({
             connecting = " (connecting...)",
-            disconnecting = " (disconnecting...)"
+            disconnecting = " (disconnecting...)",
         })[status] or "",
 
         hl = ({
@@ -28,8 +28,8 @@ function M.get_server_status_info(status, expanded)
             connecting = Text.highlights.success,
             disconnecting = Text.highlights.warning,
             disconnected = Text.highlights.warning,
-            disabled = Text.highlights.muted
-        })[status] or Text.highlights.error
+            disabled = Text.highlights.muted,
+        })[status] or Text.highlights.error,
     }
 end
 
@@ -38,8 +38,9 @@ end
 ---@return { line: NuiLine, mapping: table? }
 function M.render_server_line(server, active)
     local status = M.get_server_status_info(server.status, active)
-    local line = NuiLine():append(status.icon, status.hl):append(server.name, server.status == "connected" and
-        Text.highlights.success or status.hl)
+    local line = NuiLine()
+        :append(status.icon, status.hl)
+        :append(server.name, server.status == "connected" and Text.highlights.success or status.hl)
 
     -- Add error message for disconnected servers
     if server.error ~= vim.NIL and server.status == "disconnected" and server.error ~= "" then
@@ -55,19 +56,22 @@ function M.render_server_line(server, active)
             local disabled_tools = server_config.disabled_tools or {}
             local enabled_tools = #server.capabilities.tools - #disabled_tools
 
-            line:append(" ", Text.highlights.muted):append(Text.icons.tool, Text.highlights.info):append(" " ..
-                                                                                                             tostring(
-                    enabled_tools) .. (#disabled_tools > 0 and "/" .. tostring(#server.capabilities.tools) or ""),
-                Text.highlights.info)
+            line:append(" ", Text.highlights.muted):append(Text.icons.tool, Text.highlights.info):append(
+                " "
+                    .. tostring(enabled_tools)
+                    .. (#disabled_tools > 0 and "/" .. tostring(#server.capabilities.tools) or ""),
+                Text.highlights.info
+            )
         end
         if #server.capabilities.resources > 0 then
-            line:append(" ", Text.highlights.muted):append(Text.icons.resource, Text.highlights.warning):append(" " ..
-                                                                                                                    tostring(
-                    #server.capabilities.resources), Text.highlights.warning)
+            line:append(" ", Text.highlights.muted)
+                :append(Text.icons.resource, Text.highlights.warning)
+                :append(" " .. tostring(#server.capabilities.resources), Text.highlights.warning)
         end
         if #server.capabilities.resourceTemplates > 0 then
-            line:append(" ", Text.highlights.muted):append(Text.icons.resourceTemplate, Text.highlights.error):append(
-                " " .. tostring(#server.capabilities.resourceTemplates), Text.highlights.error)
+            line:append(" ", Text.highlights.muted)
+                :append(Text.icons.resourceTemplate, Text.highlights.error)
+                :append(" " .. tostring(#server.capabilities.resourceTemplates), Text.highlights.error)
         end
     end
 
@@ -86,7 +90,7 @@ end
 ---@return { lines: NuiLine[], mappings: table[] }
 function M.render_server_details(server, line_offset, options)
     options = options or {
-        expanded = true
+        expanded = true,
     }
     local lines = {}
     local mappings = {}
@@ -108,8 +112,10 @@ function M.render_server_details(server, line_offset, options)
         if options.expanded then
             -- Server details
             if server.uptime then
-                local uptime = NuiLine():append("│ ", Text.highlights.muted):append(string.format("Uptime: %s",
-                    utils.format_uptime(server.uptime)), Text.highlights.muted)
+                local uptime = NuiLine():append("│ ", Text.highlights.muted):append(
+                    string.format("Uptime: %s", utils.format_uptime(server.uptime)),
+                    Text.highlights.muted
+                )
                 table.insert(lines, Text.pad_line(uptime))
                 current_line = current_line + 1
             end
@@ -120,15 +126,20 @@ function M.render_server_details(server, line_offset, options)
                 table.insert(lines, Text.pad_line(NuiLine():append("│", Text.highlights.muted)))
                 current_line = current_line + 1
 
-                table.insert(lines, Text.pad_line(
-                    NuiLine():append("│ ", Text.highlights.muted):append("Tools:", Text.highlights.muted)))
+                table.insert(
+                    lines,
+                    Text.pad_line(
+                        NuiLine():append("│ ", Text.highlights.muted):append("Tools:", Text.highlights.muted)
+                    )
+                )
                 current_line = current_line + 1
 
                 -- Show tools if any
                 if #server.capabilities.tools > 0 then
                     for _, tool in ipairs(server.capabilities.tools) do
-                        local tool_line = NuiLine():append("│  • ", Text.highlights.muted):append(tool.name,
-                            Text.highlights.success)
+                        local tool_line = NuiLine()
+                            :append("│  • ", Text.highlights.muted)
+                            :append(tool.name, Text.highlights.success)
                         table.insert(lines, Text.pad_line(tool_line))
                         current_line = current_line + 1
 
@@ -138,8 +149,8 @@ function M.render_server_details(server, line_offset, options)
                             type = "tool",
                             context = vim.tbl_extend("force", tool, {
                                 server_name = server.name,
-                                hint = "Press <CR> to use tool"
-                            })
+                                hint = "Press <CR> to use tool",
+                            }),
                         })
                     end
                 end
@@ -148,17 +159,23 @@ function M.render_server_details(server, line_offset, options)
                 table.insert(lines, Text.pad_line(NuiLine():append("│", Text.highlights.muted)))
                 current_line = current_line + 1
 
-                table.insert(lines, Text.pad_line(
-                    NuiLine():append("│ ", Text.highlights.muted):append("Resources:", Text.highlights.muted)))
+                table.insert(
+                    lines,
+                    Text.pad_line(
+                        NuiLine():append("│ ", Text.highlights.muted):append("Resources:", Text.highlights.muted)
+                    )
+                )
                 current_line = current_line + 1
 
                 -- Show resources if any
                 if #server.capabilities.resources > 0 then
                     for _, resource in ipairs(server.capabilities.resources) do
-                        local resource_line = NuiLine():append("│  • ", Text.highlights.muted):append(resource.name,
-                            Text.highlights.success):append(" (", Text.highlights.muted):append(resource.mimeType or
-                                                                                                    "unknown",
-                            Text.highlights.info):append(")", Text.highlights.muted)
+                        local resource_line = NuiLine()
+                            :append("│  • ", Text.highlights.muted)
+                            :append(resource.name, Text.highlights.success)
+                            :append(" (", Text.highlights.muted)
+                            :append(resource.mimeType or "unknown", Text.highlights.info)
+                            :append(")", Text.highlights.muted)
                         table.insert(lines, Text.pad_line(resource_line))
                         current_line = current_line + 1
 
@@ -168,8 +185,8 @@ function M.render_server_details(server, line_offset, options)
                             type = "resource",
                             context = vim.tbl_extend("force", resource, {
                                 server_name = server.name,
-                                hint = "Press <CR> to access resource"
-                            })
+                                hint = "Press <CR> to access resource",
+                            }),
                         })
                     end
                 end
@@ -185,8 +202,9 @@ function M.render_server_details(server, line_offset, options)
                     table.insert(cap_parts, string.format("Resources: %d", #server.capabilities.resources))
                 end
                 if #cap_parts > 0 then
-                    local cap_line = NuiLine():append("  └─ ", Text.highlights.muted):append(
-                        table.concat(cap_parts, ", "), Text.highlights.info)
+                    local cap_line = NuiLine()
+                        :append("  └─ ", Text.highlights.muted)
+                        :append(table.concat(cap_parts, ", "), Text.highlights.info)
                     table.insert(lines, Text.pad_line(cap_line, nil, 4))
                     current_line = current_line + 1
                 end
@@ -197,7 +215,7 @@ function M.render_server_details(server, line_offset, options)
     table.insert(lines, Text.empty_line())
     return {
         lines = lines,
-        mappings = mappings
+        mappings = mappings,
     }
 end
 
@@ -231,7 +249,7 @@ function M.render_servers(servers, line_offset, options)
 
     return {
         lines = lines,
-        mappings = mappings
+        mappings = mappings,
     }
 end
 
@@ -255,7 +273,7 @@ function M.render_hub_errors(error_type, detailed)
             local error_icon = ({
                 SETUP = Text.icons.setup_error,
                 SERVER = Text.icons.server_error,
-                RUNTIME = Text.icons.runtime_error
+                RUNTIME = Text.icons.runtime_error,
             })[err.type] or Text.icons.error
 
             -- Handle multiline error messages
@@ -309,8 +327,10 @@ function M.render_server_entries(entries)
                 line:append(string.format("[%s] ", format_time(entry.timestamp)), Text.highlights.muted)
 
                 -- Add type icon and message
-                line:append((Text.icons[entry.type] or "•") .. " ",
-                    Text.highlights[entry.type] or Text.highlights.muted)
+                line:append(
+                    (Text.icons[entry.type] or "•") .. " ",
+                    Text.highlights[entry.type] or Text.highlights.muted
+                )
 
                 -- Add error code if present
                 if entry.code then
