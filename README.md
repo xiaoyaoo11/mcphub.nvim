@@ -21,6 +21,17 @@ A powerful Neovim plugin that integrates MCP (Model Context Protocol) servers in
 </p>
 </div>
 
+## :purple_heart: Sponsors
+
+Thank you to the following people:
+
+<p align="center">
+
+<a href="https://github.com/yingmanwumen"><img src="https://github.com/yingmanwumen.png" width="60px" alt="yingmanwumen" /></a>
+<a href="https://github.com/yetone"><img src="https://github.com/yetone.png" width="60px" alt="Yetone" /></a>
+
+</p>
+
 ## ✨ Features
 
 - Simple single-command interface (`:MCPHub`)
