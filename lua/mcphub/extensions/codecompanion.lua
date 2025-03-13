@@ -8,7 +8,7 @@ local xml2lua = require("codecompanion.utils.xml.xml2lua")
 local tool_schema = {
     name = "mcp",
     cmds = {
-        function(self, action)
+        function(self, action, input, output_handler)
             local hub = require("mcphub").get_hub_instance()
             local action_name = action._attr.type
             local server_name = action.server_name
@@ -21,35 +21,32 @@ local tool_schema = {
                 arguments = {}
             end
             if action_name == "use_mcp_tool" then
-                local res, err = hub:call_tool(server_name, tool_name, arguments, {
+                --use async call_tool method
+                hub:call_tool(server_name, tool_name, arguments, {
                     parse_response = true,
+                    callback = function(res, err)
+                        if err or not res then
+                            output_handler({ status = "error", data = tostring(err) or "No response from call tool" })
+                        elseif res then
+                            output_handler({ status = "success", data = res })
+                        end
+                    end,
                 })
-                if err or not res then
-                    return {
-                        status = "error",
-                        data = tostring(err) or "No response from call tool",
-                    }
-                elseif res then
-                    return {
-                        status = "success",
-                        data = res,
-                    }
-                end
             elseif action_name == "access_mcp_resource" then
-                local res, err = hub:access_resource(server_name, uri, {
+                -- use async access_resource method
+                hub:access_resource(server_name, uri, {
                     parse_response = true,
+                    callback = function(res, err)
+                        if err or not res then
+                            output_handler({
+                                status = "error",
+                                data = tostring(err) or "No response from access resource",
+                            })
+                        elseif res then
+                            output_handler({ status = "success", data = res })
+                        end
+                    end,
                 })
-                if err or not res then
-                    return {
-                        status = "error",
-                        data = tostring(err) or "No response from access resource",
-                    }
-                elseif res then
-                    return {
-                        status = "success",
-                        data = res,
-                    }
-                end
             else
                 return {
                     status = "error",
@@ -228,15 +225,15 @@ The Model Context Protocol (MCP) enables communication with locally running MCP 
             if result.images and #result.images > 0 then
                 -- TODO: Add image support when codecompanion supports it
                 -- self.chat:add_message({
-                --   role = config.constants.USER_ROLE,
-                --   content = vim.tbl_map(function(image)
-                --     return {
-                --       type = "image_url",
-                --       image_url = {
-                --         url = string.format("data:%s;base64,%s", image.mimeType, image.data),
-                --       },
-                --     }
-                --   end, result.images),
+                --     role = config.constants.USER_ROLE,
+                --     content = vim.tbl_map(function(image)
+                --         return {
+                --             type = "image_url",
+                --             -- image_url = {
+                --             image_url = string.format("data:%s;base64,%s", image.mimeType, image.data),
+                --             -- },
+                --         }
+                --     end, result.images),
                 -- }, { visible = false })
             end
 

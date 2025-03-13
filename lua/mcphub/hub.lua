@@ -320,13 +320,13 @@ end
 --- @return table|nil, string|nil If no callback is provided, returns response and error
 function MCPHub:call_tool(server_name, tool_name, args, opts)
     opts = opts or {}
-    if opts.parse_response == true then
-        if opts.callback then
-            local original_callback = opts.callback
-            opts.callback = function(response, err)
-                local result = prompt_utils.parse_tool_response(response)
-                original_callback(result, err)
+    if opts.callback then
+        local original_callback = opts.callback
+        opts.callback = function(response, err)
+            if opts.parse_response == true then
+                response = prompt_utils.parse_tool_response(response)
             end
+            original_callback(response, err)
         end
     end
     -- ensure args is treated as an object in json
@@ -360,13 +360,13 @@ end
 --- @return table|nil, string|nil If no callback is provided, returns response and error
 function MCPHub:access_resource(server_name, uri, opts)
     opts = opts or {}
-    if opts.parse_response == true then
-        if opts.callback then
-            local original_callback = opts.callback
-            opts.callback = function(response, err)
-                local result = prompt_utils.parse_resource_response(response)
-                original_callback(result, err)
+    if opts.callback then
+        local original_callback = opts.callback
+        opts.callback = function(response, err)
+            if opts.parse_response == true then
+                response = prompt_utils.parse_resource_response(response)
             end
+            original_callback(response, err)
         end
     end
     local response, err = self:api_request(
