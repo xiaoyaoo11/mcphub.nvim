@@ -17,6 +17,22 @@ local State = {
     hub_instance = nil,
     ui_instance = nil,
 
+    -- Marketplace state
+    marketplace_state = {
+        status = "idle", -- idle/loading/error
+        catalog = {
+            items = {},
+            last_updated = nil,
+        },
+        filters = {
+            search = "",
+            category = nil,
+            sort = "newest", -- newest/stars/name
+        },
+        selected_server = nil,
+        server_details = {}, -- Map of mcpId -> details
+    },
+
     -- Server state
     server_state = {
         status = "disconnected", -- disconnected/connecting/connected

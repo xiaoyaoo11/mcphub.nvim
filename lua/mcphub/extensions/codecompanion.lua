@@ -228,10 +228,8 @@ The Model Context Protocol (MCP) enables communication with locally running MCP 
                 --     role = config.constants.USER_ROLE,
                 --     content = vim.tbl_map(function(image)
                 --         return {
-                --             type = "image_url",
-                --             -- image_url = {
-                --             image_url = string.format("data:%s;base64,%s", image.mimeType, image.data),
-                --             -- },
+                --             type = "image",
+                --             base64 = string.format("data:%s;base64,%s", image.mimeType, image.data),
                 --         }
                 --     end, result.images),
                 -- }, { visible = false })

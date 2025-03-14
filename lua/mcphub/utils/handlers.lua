@@ -11,7 +11,7 @@ M.TypeHandlers = {
             return true
         end,
         convert = function(value)
-            return value
+            return tostring(value)
         end,
         format = function()
             return "string"

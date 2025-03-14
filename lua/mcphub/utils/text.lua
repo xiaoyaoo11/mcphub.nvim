@@ -28,6 +28,10 @@ M.icons = {
     arrowRight = "➜",
     triangleDown = "▼",
     triangleRight = "▶",
+    search = "",
+    tag = "",
+    sort = "",
+    octoface = "",
 
     -- Error type icons
     setup_error = "",
@@ -188,6 +192,11 @@ function M.render_header(width, current_view)
             key = "H",
             label = "Hub",
             view = "main",
+        },
+        {
+            key = "M",
+            label = "Marketplace",
+            view = "marketplace",
         },
         {
             key = "C",

@@ -20,6 +20,12 @@ Error.Types = {
         VERSION_MISMATCH = "VERSION_MISMATCH",
         SERVER_START = "SERVER_START",
     },
+    MARKETPLACE = {
+        FETCH_ERROR = "FETCH_ERROR", -- Failed to fetch marketplace data
+        SERVER_NOT_FOUND = "SERVER_NOT_FOUND", -- Server not found in catalog
+        INVALID_RESPONSE = "INVALID_RESPONSE", -- Invalid response from marketplace API
+        CACHE_ERROR = "CACHE_ERROR", -- Error with marketplace cache
+    },
     SERVER = {
         CONNECTION = "CONNECTION",
         HEALTH_CHECK = "HEALTH_CHECK",

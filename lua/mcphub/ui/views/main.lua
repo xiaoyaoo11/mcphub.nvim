@@ -32,22 +32,6 @@ function MainView:new(ui)
         capability_line = nil, -- Will store [line, col]
     }
 
-    -- Setup keymaps
-    self.keymaps = {
-        ["t"] = {
-            action = function()
-                self:handle_server_toggle()
-            end,
-            desc = "Toggle server",
-        },
-        ["<CR>"] = {
-            action = function()
-                self:handle_action()
-            end,
-            desc = "Expand/Collapse",
-        },
-    }
-
     return self
 end
 

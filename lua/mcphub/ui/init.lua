@@ -44,6 +44,7 @@ function UI:new()
                     k == "server_output"
                     or k == "setup_state"
                     or k == "server_state"
+                    or k == "marketplace_state"
                     or k == "logs"
                     or k == "errors"
                 then
@@ -56,7 +57,7 @@ function UI:new()
                 instance:render()
             end
         end
-    end, { "ui", "server", "setup", "errors" })
+    end, { "ui", "server", "setup", "errors", "marketplace" })
 
     -- Create cleanup autocommands
     local group = vim.api.nvim_create_augroup("mcphub_ui", {
@@ -96,6 +97,7 @@ function UI:init_views()
         logs = require("mcphub.ui.views.logs"):new(self),
         help = require("mcphub.ui.views.help"):new(self),
         config = require("mcphub.ui.views.config"):new(self),
+        marketplace = require("mcphub.ui.views.marketplace"):new(self),
     }
 
     -- Set initial view
@@ -172,6 +174,9 @@ function UI:setup_keymaps()
     map("H", function()
         self:switch_view("main")
     end, "Switch to Home view")
+    map("M", function()
+        self:switch_view("marketplace")
+    end, "Switch to Marketplace")
 
     map("C", function()
         self:switch_view("config")

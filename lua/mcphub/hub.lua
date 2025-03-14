@@ -24,6 +24,18 @@ local RESOURCE_TIMEOUT = 30000 -- 30s for resource access
 local MCPHub = {}
 MCPHub.__index = MCPHub
 
+local function url_encode(str)
+    if type(str) ~= "number" then
+        str = str:gsub("\r?\n", "\r\n")
+        str = str:gsub("([^%w%-%.%_%~ ])", function(c)
+            return string.format("%%%02X", c:byte())
+        end)
+        str = str:gsub(" ", "+")
+        return str
+    else
+        return str
+    end
+end
 --- Create a new MCPHub instance
 --- @param opts table Configuration options
 --- @return MCPHub Instance of MCPHub
@@ -237,7 +249,7 @@ end
 --- @param opts? { callback?: function } Optional callback(response: table|nil, error?: string)
 --- @return table|nil, string|nil If no callback is provided, returns response and error
 function MCPHub:get_server_info(name, opts)
-    return self:api_request("GET", string.format("servers/%s/info", name), opts)
+    return self:api_request("GET", string.format("servers/%s/info", url_encode(name)), opts)
 end
 
 --- Start a disabled/disconnected MCP server
@@ -264,7 +276,7 @@ function MCPHub:start_mcp_server(name, opts)
         disabled = false,
     })
     -- Call start endpoint
-    return self:api_request("POST", string.format("servers/%s/start", name), {
+    return self:api_request("POST", string.format("servers/%s/start", url_encode(name)), {
         callback = function(response, err)
             self:refresh()
             if opts.callback then
@@ -299,7 +311,7 @@ function MCPHub:stop_mcp_server(name, disable, opts)
         disabled = disable or false,
     })
     -- Call stop endpoint
-    return self:api_request("POST", string.format("servers/%s/stop", name), {
+    return self:api_request("POST", string.format("servers/%s/stop", url_encode(name)), {
         query = disable and {
             disable = "true",
         } or nil,
@@ -338,7 +350,7 @@ function MCPHub:call_tool(server_name, tool_name, args, opts)
 
     local response, err = self:api_request(
         "POST",
-        string.format("servers/%s/tools", server_name),
+        string.format("servers/%s/tools", url_encode(server_name)),
         vim.tbl_extend("force", {
             timeout = opts.timeout or TOOL_TIMEOUT,
             body = {
@@ -371,7 +383,7 @@ function MCPHub:access_resource(server_name, uri, opts)
     end
     local response, err = self:api_request(
         "POST",
-        string.format("servers/%s/resources", server_name),
+        string.format("servers/%s/resources", url_encode(server_name)),
         vim.tbl_extend("force", {
             timeout = opts.timeout or RESOURCE_TIMEOUT,
             body = {
@@ -777,6 +789,119 @@ function MCPHub:get_prompts(opts)
         use_mcp_tool = prompt_utils.get_use_mcp_tool_prompt(opts.use_mcp_tool_example),
         access_mcp_resource = prompt_utils.get_access_mcp_resource_prompt(opts.access_mcp_resource_example),
     }
+end
+
+--- Get marketplace catalog with filters
+--- @param opts? { search?: string, category?: string, sort?: string, callback?: function, timeout?: number }
+--- @return table|nil, string|nil If no callback is provided, returns response and error
+function MCPHub:get_marketplace_catalog(opts)
+    opts = opts or {}
+    local query = {}
+
+    -- Add filters to query if provided
+    if opts.search then
+        query.search = opts.search
+    end
+    if opts.category then
+        query.category = opts.category
+    end
+    if opts.sort then
+        query.sort = opts.sort
+    end
+
+    -- Make request with market-specific error handling
+    return self:api_request("GET", "marketplace", {
+        timeout = opts.timeout or TOOL_TIMEOUT,
+        query = query,
+        callback = function(response, err)
+            if err then
+                local market_err = Error(
+                    "MARKETPLACE",
+                    Error.Types.MARKETPLACE.FETCH_ERROR,
+                    "Failed to fetch marketplace catalog",
+                    { error = err }
+                )
+                if opts.callback then
+                    opts.callback(nil, tostring(market_err))
+                    return
+                end
+                return nil, tostring(market_err)
+            end
+
+            -- Update marketplace state
+            State:update({
+                marketplace_state = {
+                    status = "idle",
+                    catalog = {
+                        items = response.items or {},
+                        last_updated = response.timestamp,
+                    },
+                },
+            }, "marketplace")
+
+            if opts.callback then
+                opts.callback(response)
+            else
+                return response
+            end
+        end,
+    })
+end
+
+--- Get detailed information about a marketplace server
+--- @param mcpId string The server's unique identifier
+--- @param opts? { callback?: function, timeout?: number }
+--- @return table|nil, string|nil If no callback is provided, returns response and error
+function MCPHub:get_marketplace_server_details(mcpId, opts)
+    opts = opts or {}
+
+    -- Check if we have cached details that are still valid
+    local cached = State.marketplace_state.server_details[mcpId]
+    if cached then
+        if opts.callback then
+            opts.callback(cached.data)
+            return
+        end
+        return cached.data
+    end
+
+    -- Fetch fresh details
+    return self:api_request("POST", "marketplace/details", {
+        timeout = opts.timeout or TOOL_TIMEOUT,
+        body = { mcpId = mcpId },
+        callback = function(response, err)
+            if err then
+                local market_err = Error(
+                    "MARKETPLACE",
+                    Error.Types.MARKETPLACE.FETCH_ERROR,
+                    "Failed to fetch server details",
+                    { mcpId = mcpId, error = err }
+                )
+                if opts.callback then
+                    opts.callback(nil, tostring(market_err))
+                    return
+                end
+                return nil, tostring(market_err)
+            end
+
+            State:update({
+                marketplace_state = {
+                    server_details = {
+                        [mcpId] = {
+                            data = response.server,
+                            timestamp = vim.loop.now(),
+                        },
+                    },
+                },
+            }, "marketplace")
+
+            if opts.callback then
+                opts.callback(response.server)
+            else
+                return response.server
+            end
+        end,
+    })
 end
 
 return MCPHub

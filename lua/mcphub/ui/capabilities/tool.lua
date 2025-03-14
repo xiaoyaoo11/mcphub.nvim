@@ -79,6 +79,9 @@ end
 function ToolHandler:convert_param(name, value)
     local param_schema = self.info.inputSchema.properties[name]
     local handler = Handlers.TypeHandlers[param_schema.type]
+    if not handler then
+        return value
+    end
     return handler.convert(value)
 end
 
@@ -256,9 +259,7 @@ function ToolHandler:render_param_form(line_offset)
             local name_line = NuiLine()
                 :append(param.required and "* " or "  ", highlights.error)
                 :append(param.name, highlights.success)
-                :append(" (", highlights.muted)
-                :append(self:format_param_type(param), highlights.muted)
-                :append(")", highlights.muted)
+                :append(string.format(" (%s)", self:format_param_type(param)), highlights.muted)
             vim.list_extend(lines, self:render_section_content({ name_line }, 2))
 
             -- Description if any
