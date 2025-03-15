@@ -9,15 +9,22 @@ A powerful Neovim plugin that integrates MCP (Model Context Protocol) servers in
 
 <div align="center">
 <p>
-<h3>MCP Hub Interface</h3>
-<video controls muted src="https://github.com/user-attachments/assets/9e574d2d-358e-4a3e-ae19-d9e85c5dd2f0"></video>
+<h4>MCP Hub UI</h4>
+<video controls muted src="https://github.com/user-attachments/assets/22d14360-5994-455b-8789-4fffd2b598e2"></video>
 </p>
 </div>
 
 <div align="center">
 <p>
-<h3>Using <a href="https://github.com/olimorris/codecompanion.nvim">Codecompanion Chat</a> plugin</h3>
+<h4>Using <a href="https://github.com/olimorris/codecompanion.nvim">codecompanion</a></h4>
 <video controls muted src="https://github.com/user-attachments/assets/cefce4bb-d07f-4423-8873-cf7d56656cd3"></video>
+</p>
+</div>
+
+<div align="center">
+<p>
+<h4>🎉 Marketplace </h4>
+<video controls muted src="https://github.com/user-attachments/assets/20a18abc-f2ba-436e-aab7-ea795f6e28d2"></video>
 </p>
 </div>
 
@@ -68,7 +75,7 @@ Using [lazy.nvim](https://github.com/folke/lazy.nvim):
     dependencies = {
         "nvim-lua/plenary.nvim",  -- Required for Job and HTTP requests
     },
-    -- cmd = "MCPHub", -- lazily start the hub when `MCPHub` is called 
+    -- cmd = "MCPHub", -- lazily start the hub when `MCPHub` is called
     build = "npm install -g mcp-hub@latest", -- Installs required mcp-hub npm module
     config = function()
         require("mcphub").setup({
@@ -141,19 +148,6 @@ You can:
 2. Use the hub instance in your code:
 
 ```lua
--- Get hub instance after setup
-local mcphub = require("mcphub")
-
--- Option 1: Use on_ready callback
-mcphub.setup({
-    port = 3000,
-    config = vim.fn.expand("~/mcpservers.json"),
-    on_ready = function(hub)
-        -- Hub is ready to use here
-    end
-})
-
--- Option 2: Get hub instance directly (might be nil if setup in progress)
 local hub = mcphub.get_hub_instance()
 
 -- Call a tool (sync)
@@ -179,22 +173,7 @@ local response, err = hub:access_resource("server-name", "resource://uri", {
 })
 
 -- Get prompt helpers for system prompts
-local prompts = hub:get_prompts({
-    use_mcp_tool_example = [[<use_mcp_tool>
-<server_name>weather-server</server_name>
-<tool_name>get_forecast</tool_name>
-<arguments>
-{
-  "city": "San Francisco",
-  "days": 5
-}
-</arguments>
-</use_mcp_tool>]],
-    access_mcp_resource_example = [[<access_mcp_resource>
-<server_name>weather-server</server_name>
-<uri>weather://san-francisco/current</uri>
-</access_mcp_resource>]]
-})
+local prompts = hub:get_prompts()
 -- prompts.active_servers: Lists currently active servers
 -- prompts.use_mcp_tool: Instructions for tool usage with example
 -- prompts.access_mcp_resource: Instructions for resource access with example
@@ -235,7 +214,6 @@ Add it as a dependency to load the plugin before codecompanion:
                     callback = function() return require("mcphub.extensions.codecompanion") end,
                     description = "Call tools and resources from the MCP Servers",
                     opts = {
-                      -- user_approval = true,
                       requires_approval = true,
                     }
                 }
