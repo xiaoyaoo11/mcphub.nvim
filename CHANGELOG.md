@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.0] - 2025-03-15
+
+### Added
+
+- Marketplace integration
+  - Browse available MCP servers with details and stats
+  - Sort, filter by category, and search servers
+  - View server documentation and installation guides
+  - One-click installation via Avante/CodeCompanion
+- Server cards and detail views
+  - Rich server information display
+  - GitHub stats integration
+  - README preview support
+- Automatic installer system
+  - Support for Avante and CodeCompanion installations
+  - Standardized installation prompts
+  - Intelligent server configuration handling
+
+### Changed
+
+- Updated MCP Hub version requirement to 1.7.1
+- Enhanced UI with new icons and visual improvements
+- Improved server state management and configuration handling
+
 ## [3.2.0] - 2025-03-14
 
 ### Added

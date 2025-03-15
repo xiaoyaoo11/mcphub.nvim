@@ -1,5 +1,5 @@
 return {
-    PLUGIN_VERSION = "3.2.0", -- Current plugin version
+    PLUGIN_VERSION = "3.3.0", -- Current plugin version
     REQUIRED_NODE_VERSION = { -- Required mcp-hub version
         major = 1,
         minor = 7,
