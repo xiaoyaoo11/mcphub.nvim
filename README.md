@@ -68,6 +68,7 @@ Using [lazy.nvim](https://github.com/folke/lazy.nvim):
     dependencies = {
         "nvim-lua/plenary.nvim",  -- Required for Job and HTTP requests
     },
+    -- cmd = "MCPHub", -- lazily start the hub when `MCPHub` is called 
     build = "npm install -g mcp-hub@latest", -- Installs required mcp-hub npm module
     config = function()
         require("mcphub").setup({
@@ -230,7 +231,8 @@ Add it as a dependency to load the plugin before codecompanion:
         chat = {
             tools = {
                 ["mcp"] = {
-                    callback = require("mcphub.extensions.codecompanion"),
+                    -- calling it in a function would prevent mcphub from being loaded before it's needed
+                    callback = function() return require("mcphub.extensions.codecompanion") end,
                     description = "Call tools and resources from the MCP Servers",
                     opts = {
                       -- user_approval = true,
