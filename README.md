@@ -1,11 +1,11 @@
-# MCPHub.nvim
+# mcphub.nvim
 
 [![Neovim](https://img.shields.io/badge/NeoVim-%2357A143.svg?&style=flat-square&logo=neovim&logoColor=white)](https://neovim.io)
 [![Lua](https://img.shields.io/badge/Lua-2C2D72?style=flat-square&logo=lua&logoColor=white)](https://www.lua.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 
-A powerful Neovim plugin that integrates MCP (Model Context Protocol) servers into your workflow. Configure and manage MCP servers through a centralized config file while providing an intuitive UI for testing tools and resources. Perfect for LLM integration, offering both programmatic API access and interactive testing capabilities through the `:MCPHub` command.
+A powerful Neovim plugin that integrates MCP (Model Context Protocol) servers into your workflow. Configure and manage MCP servers through a centralized config file while providing an intuitive UI for browsing, installing and testing tools and resources. Perfect for LLM integration, offering both programmatic API access and interactive testing capabilities through the `:MCPHub` command.
 
 <div align="center">
 <p>
@@ -34,19 +34,29 @@ Thank you to the following people:
 
 ## ✨ Features
 
-- Simple single-command interface (`:MCPHub`)
-- Integrated Hub view for managing servers and tools
+- **Simple single-command interface** (`:MCPHub`)
+- **Integrated Hub view** for managing servers and tools
   - Dynamically enable/disable servers and tools to optimize token usage
   - Start/stop servers with persistent state
   - Enable/disable specific tools per server
   - State persists across restarts
-- Parallel startup for improved performance
-- Interactive UI for testing tools and resources
-- Automatic server lifecycle management across multiple Neovim instances
-- Smart shutdown handling with configurable delay
-- Both sync and async operations supported
-- Clean client registration/cleanup
-- Comprehensive API for tool and resource access
+- **Marketplace Integration**
+  - Browse available MCP servers with details and stats
+  - Sort, filter by category, and search servers
+  - View server documentation and installation guides
+  - One-click installation via Avante/CodeCompanion
+- **Interactive Testing**
+  - Real-time tool testing interface
+  - Resource browsing and access
+  - Built-in documentation and help
+- **Performance and Reliability**
+  - Parallel startup for improved performance
+  - Automatic server lifecycle management
+  - Smart shutdown handling with configurable delay
+- **Developer-friendly**
+  - Both sync and async operations supported
+  - Clean client registration/cleanup
+  - Comprehensive API for tool and resource access
 
 ## 📦 Installation
 
@@ -441,18 +451,13 @@ sequenceDiagram
     H-->>C: Return Data
 ```
 
-## 🚧 Future Enhancements
+## 🚧 TODO
 
-Currently planning these features:
-
-- Workflow integration with CodeCompanion for enhanced code assistance
-- Enhanced help view with comprehensive documentation
-- Community marketplace for sharing and discovering MCP servers
-- Add custom descriptions for each MCP server through the UI
-- Support server-specific configuration through the interface
+- [ ] Enhanced help view with comprehensive documentation
 
 ## 👏 Acknowledgements
 
 Thanks to:
 
+- [cline/mcp-marketplace](https://github.com/cline/mcp-marketplace) for providing the marketplace api
 - [nui.nvim](https://github.com/MunifTanjim/nui.nvim) for inspiring our text highlighting utilities

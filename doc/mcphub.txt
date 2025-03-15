@@ -20,17 +20,34 @@ INTRODUCTION                                               *mcphub-introduction*
 
 MCPHub.nvim integrates MCP (Model Context Protocol) servers into your workflow.
 Configure and manage MCP servers through a centralized config file while providing
-an intuitive UI for testing tools and resources. Perfect for LLM integration,
-offering both programmatic API access and interactive testing capabilities.
+an intuitive UI for browsing, installing and testing tools and resources. Perfect 
+for LLM integration, offering both programmatic API access and interactive testing
+capabilities.
 
 Features:~
 - Simple single-command interface (|:MCPHub|)
-- Interactive UI for testing tools and resources
-- Automatic server lifecycle management across multiple Neovim instances
-- Smart shutdown handling with configurable delay
-- Both sync and async operations supported
-- Clean client registration/cleanup
-- Comprehensive API for tool and resource access
+- Integrated Hub view for managing servers and tools
+  - Dynamically enable/disable servers and tools to optimize token usage
+  - Start/stop servers with persistent state
+  - Enable/disable specific tools per server
+  - State persists across restarts
+- Marketplace Integration
+  - Browse available MCP servers with details and stats
+  - Sort, filter by category, and search servers
+  - View server documentation and installation guides
+  - One-click installation via Avante/CodeCompanion
+- Interactive Testing
+  - Real-time tool testing interface
+  - Resource browsing and access
+  - Built-in documentation and help
+- Performance and Reliability
+  - Parallel startup for improved performance
+  - Automatic server lifecycle management
+  - Smart shutdown handling with configurable delay
+- Developer-friendly
+  - Both sync and async operations supported
+  - Clean client registration/cleanup
+  - Comprehensive API for tool and resource access
 
 ==============================================================================
 REQUIREMENTS                                               *mcphub-requirements*
@@ -38,7 +55,7 @@ REQUIREMENTS                                               *mcphub-requirements*
 - Neovim >= 0.8.0
 - Node.js >= 18.0.0
 - plenary.nvim (for HTTP requests)
-- mcp-hub (automatically installed via build command)
+- mcp-hub  (automatically installed via build command)
 
 ==============================================================================
 INSTALLATION                                               *mcphub-installation*
@@ -137,16 +154,23 @@ These extensions allow you to use MCP tools and resources directly within your
 chat interfaces.
 
 CodeCompanion Integration:~
+Note: Breaking changes with codecompanion v13 in tool configuration.
 >lua
-    tools = {
-        ["mcp"] = {
-            callback = require("mcphub.extensions.codecompanion"),
-            description = "Call tools and resources from the MCP Servers",
-            opts = {
-                user_approval = true,
-            },
-        },
-    }
+    require("codecompanion").setup({
+        strategies = {
+            chat = {
+                tools = {
+                    ["mcp"] = {
+                        callback = require("mcphub.extensions.codecompanion"),
+                        description = "Call tools and resources from the MCP Servers",
+                        opts = {
+                            requires_approval = true,
+                        }
+                    }
+                }
+            }
+        }
+    })
 <
 See extensions/ folder for more examples and implementation details.
 
