@@ -173,6 +173,10 @@ function MCPHub:handle_server_ready(opts)
                             end
                             return
                         end
+
+                        -- Fetch marketplace catalog after successful registration
+                        self:get_marketplace_catalog()
+
                         if opts.on_ready then
                             opts.on_ready(self)
                         end
@@ -198,7 +202,6 @@ end
 function MCPHub:check_server(callback)
     log.debug("Checking Server")
     if self:is_ready() then
-        log.debug("hub is ready, no need to checkserver")
         callback(true)
         return
     end
@@ -556,9 +559,11 @@ end
 
 --- Update server configuration in the MCP config file
 ---@param server_name string Name of the server to update
----@param updates table Key-value pairs to update in the server config
+---@param updates table|nil Key-value pairs to update in the server config or nil to remove
+---@param opts? { callback?: function } Optional callback(success: boolean)
 ---@return boolean, string|nil Returns success status and error message if any
-function MCPHub:update_server_config(server_name, updates)
+function MCPHub:update_server_config(server_name, updates, opts)
+    opts = opts or {}
     -- Load and validate current config
     local result = self:load_config()
     if not result.ok then
@@ -569,8 +574,13 @@ function MCPHub:update_server_config(server_name, updates)
     -- Ensure mcpServers exists
     config.mcpServers = config.mcpServers or {}
 
-    -- Update or create server config
-    config.mcpServers[server_name] = vim.tbl_deep_extend("force", config.mcpServers[server_name] or {}, updates)
+    if updates then
+        -- Update mode: merge updates with existing config
+        config.mcpServers[server_name] = vim.tbl_deep_extend("force", config.mcpServers[server_name] or {}, updates)
+    else
+        -- Remove mode: delete server config
+        config.mcpServers[server_name] = nil
+    end
 
     -- Write updated config back to file
     local json_str = utils.pretty_json(vim.json.encode(config))
@@ -590,11 +600,15 @@ function MCPHub:update_server_config(server_name, updates)
     return true
 end
 
---- Update tool configuration for a server
----@param server_name string Name of the server
----@param tool_name string Name of the tool
----@param disable boolean Whether to disable the tool
+--- Remove server configuration
+---@param mcpId string Server ID to remove
+---@param opts? { callback?: function } Optional callback(success: boolean)
 ---@return boolean, string|nil Returns success status and error message if any
+function MCPHub:remove_server_config(mcpId, opts)
+    -- Use update_server_config with nil updates to remove
+    return self:update_server_config(mcpId, nil, opts)
+end
+
 function MCPHub:update_tool_config(server_name, tool_name, disable)
     -- Get current config for the server
     local result = self:load_config()
@@ -702,20 +716,20 @@ function MCPHub:hard_refresh()
     end
 end
 
--- function MCPHub:restart(callback)
---     if not self:ensure_ready() then
---         return
---     end
---     if self.is_owner then
---         self:stop()
---         State:reset()
---         self:start(nil, callback)
---     else
---         vim.notify("Only the owner can restart the server", vim.log.levels.INFO)
---         self:refresh()
---         callback(true)
---     end
--- end
+function MCPHub:restart(callback)
+    if not self:ensure_ready() then
+        return
+    end
+    if self.is_owner then
+        self:stop()
+        State:reset()
+        self:start(nil, callback)
+    else
+        vim.notify("Only the owner can restart the server", vim.log.levels.INFO)
+        self:refresh()
+        callback(true)
+    end
+end
 
 function MCPHub:ensure_ready()
     if not self:is_ready() then
@@ -778,10 +792,10 @@ end
 
 --- Get all MCP system prompts
 ---@param opts? {use_mcp_tool_example?: string, access_mcp_resource_example?: string}
----@return {active_servers: string|nil, use_mcp_tool: string, access_mcp_resource: string}
+---@return {active_servers: string|nil, use_mcp_tool: string|nil, access_mcp_resource: string|nil}
 function MCPHub:get_prompts(opts)
     if not self:ensure_ready() then
-        return
+        return {}
     end
     opts = opts or {}
     return {
@@ -809,6 +823,11 @@ function MCPHub:get_marketplace_catalog(opts)
         query.sort = opts.sort
     end
 
+    State:update({
+        marketplace_state = {
+            status = "loading",
+        },
+    }, "marketplace")
     -- Make request with market-specific error handling
     return self:api_request("GET", "marketplace", {
         timeout = opts.timeout or TOOL_TIMEOUT,
@@ -821,11 +840,12 @@ function MCPHub:get_marketplace_catalog(opts)
                     "Failed to fetch marketplace catalog",
                     { error = err }
                 )
-                if opts.callback then
-                    opts.callback(nil, tostring(market_err))
-                    return
-                end
-                return nil, tostring(market_err)
+                State:update({
+                    marketplace_state = {
+                        status = "error",
+                    },
+                }, "marketplace")
+                return
             end
 
             -- Update marketplace state
@@ -838,12 +858,6 @@ function MCPHub:get_marketplace_catalog(opts)
                     },
                 },
             }, "marketplace")
-
-            if opts.callback then
-                opts.callback(response)
-            else
-                return response
-            end
         end,
     })
 end
@@ -858,13 +872,8 @@ function MCPHub:get_marketplace_server_details(mcpId, opts)
     -- Check if we have cached details that are still valid
     local cached = State.marketplace_state.server_details[mcpId]
     if cached then
-        if opts.callback then
-            opts.callback(cached.data)
-            return
-        end
-        return cached.data
+        return cached
     end
-
     -- Fetch fresh details
     return self:api_request("POST", "marketplace/details", {
         timeout = opts.timeout or TOOL_TIMEOUT,
@@ -877,28 +886,20 @@ function MCPHub:get_marketplace_server_details(mcpId, opts)
                     "Failed to fetch server details",
                     { mcpId = mcpId, error = err }
                 )
-                if opts.callback then
-                    opts.callback(nil, tostring(market_err))
-                    return
-                end
-                return nil, tostring(market_err)
-            end
-
-            State:update({
-                marketplace_state = {
-                    server_details = {
-                        [mcpId] = {
-                            data = response.server,
-                            timestamp = vim.loop.now(),
+                State:add_error(market_err)
+                -- Keep server details as nil to indicate error state
+            else
+                -- Update state with new details
+                State:update({
+                    marketplace_state = {
+                        server_details = {
+                            [mcpId] = {
+                                data = response.server,
+                                timestamp = vim.loop.now(),
+                            },
                         },
                     },
-                },
-            }, "marketplace")
-
-            if opts.callback then
-                opts.callback(response.server)
-            else
-                return response.server
+                }, "marketplace")
             end
         end,
     })

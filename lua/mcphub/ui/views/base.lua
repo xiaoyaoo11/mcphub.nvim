@@ -332,10 +332,10 @@ function View:render_footer()
         key = "r",
         desc = "Refresh",
     })
-    -- table.insert(key_items, {
-    --     key = "R",
-    --     desc = "Restart"
-    -- })
+    table.insert(key_items, {
+        key = "R",
+        desc = "Restart",
+    })
     -- Add common close
     table.insert(key_items, {
         key = "q",

@@ -21,8 +21,8 @@ M.icons = {
     circle = "○",
     circleFilled = "●",
     bug = "",
-    event = " ",
-    favorite = " ",
+    event = "",
+    favorite = "",
     loaded = "●",
     not_loaded = "○",
     arrowRight = "➜",
@@ -32,6 +32,15 @@ M.icons = {
     tag = "",
     sort = "",
     octoface = "",
+    check = "✔",
+    gear = "",
+    loading = "",
+    downArrow = "",
+    uninstall = "",
+    sparkles = "✨",
+    download = "",
+    install = "",
+    link = "",
 
     -- Error type icons
     setup_error = "",
@@ -114,13 +123,11 @@ function M.align_text(text, width, align, highlight)
     -- Calculate padding
     local padding = math.max(0, inner_width - line_width)
     local left_pad = align == "center" and math.floor(padding / 2) or align == "right" and padding or 0
-    local right_pad = align == "center" and math.ceil(padding / 2) or align == "left" and padding or 0
+    -- local right_pad = align == "center" and math.ceil(padding / 2) or align == "left" and padding or 0
 
     -- Create padded line
-    return NuiLine()
-        :append(string.rep(" ", M.HORIZONTAL_PADDING + left_pad))
-        :append(line)
-        :append(string.rep(" ", right_pad + M.HORIZONTAL_PADDING))
+    return NuiLine():append(string.rep(" ", M.HORIZONTAL_PADDING + left_pad)):append(line)
+    -- :append(string.rep(" ", right_pad + M.HORIZONTAL_PADDING))
 end
 
 ---@param label string

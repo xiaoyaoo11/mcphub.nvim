@@ -19,15 +19,15 @@ local State = {
 
     -- Marketplace state
     marketplace_state = {
-        status = "idle", -- idle/loading/error
+        status = "loading", -- idle/loading/error
         catalog = {
             items = {},
             last_updated = nil,
         },
         filters = {
             search = "",
-            category = nil,
-            sort = "newest", -- newest/stars/name
+            category = "",
+            sort = "stars", -- newest/stars/name
         },
         selected_server = nil,
         server_details = {}, -- Map of mcpId -> details
@@ -178,6 +178,19 @@ function State:get_errors(type)
     return vim.deepcopy(self.errors.items)
 end
 
+--- Check if a server is installed by comparing mcpId
+--- @param mcpId string Server ID to check
+--- @return boolean true if server is installed
+function State:is_server_installed(mcpId)
+    local servers = self.server_state.servers or {}
+    for _, server in ipairs(servers) do
+        if server.name == mcpId then
+            return true
+        end
+    end
+    return false
+end
+
 function State:emit(event, data)
     local event_subscribers = self.event_subscribers[event]
     if event_subscribers then
@@ -236,9 +249,8 @@ end
 function State:subscribe(callback, types)
     types = types or { "all" }
     for _, type in ipairs(types) do
-        if self.subscribers[type] then
-            table.insert(self.subscribers[type], callback)
-        end
+        self.subscribers[type] = self.subscribers[type] or {}
+        table.insert(self.subscribers[type], callback)
     end
 end
 

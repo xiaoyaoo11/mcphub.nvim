@@ -217,6 +217,16 @@ function ToolHandler:execute()
     end
 end
 
+function ToolHandler:render_submit()
+    local submit_content
+    if self.state.is_executing then
+        submit_content = NuiLine():append("[ " .. Text.icons.event .. " Processing... ]", highlights.muted)
+    else
+        submit_content = NuiLine():append("[ " .. Text.icons.gear .. " Submit ]", highlights.success_fill)
+    end
+    return submit_content
+end
+
 -- Rendering
 function ToolHandler:render_param_form(line_offset)
     -- Clear previous line tracking
@@ -232,18 +242,7 @@ function ToolHandler:render_param_form(line_offset)
         local placeholder = NuiLine():append("No parameters required ", highlights.muted)
 
         -- Submit button
-        local submit_content = NuiLine()
-        if self.state.is_executing then
-            submit_content
-                :append("[ ", highlights.muted)
-                :append("Processing...", highlights.muted)
-                :append(" ]", highlights.muted)
-        else
-            submit_content
-                :append("[ ", highlights.success_fill)
-                :append("Submit", highlights.success_fill)
-                :append(" ]", highlights.success_fill)
-        end
+        local submit_content = self:render_submit()
         vim.list_extend(
             lines,
             self:render_section_content({ placeholder, NuiLine():append(" ", highlights.muted), submit_content }, 2)
@@ -287,18 +286,7 @@ function ToolHandler:render_param_form(line_offset)
         end
 
         -- Submit button
-        local submit_content
-        if self.state.is_executing then
-            submit_content = NuiLine()
-                :append("[ ", highlights.muted)
-                :append("Processing...", highlights.muted)
-                :append(" ]", highlights.muted)
-        else
-            submit_content = NuiLine()
-                :append("[ ", highlights.success_fill)
-                :append("Submit", highlights.success_fill)
-                :append(" ]", highlights.success_fill)
-        end
+        local submit_content = self:render_submit()
         vim.list_extend(lines, self:render_section_content({ submit_content }, 2))
 
         -- Track submit line

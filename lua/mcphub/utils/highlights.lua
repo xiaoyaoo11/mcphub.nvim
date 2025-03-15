@@ -11,6 +11,7 @@ M.groups = {
     header_shortcut = "MCPHubHeaderShortcut",
     keymap = "MCPHubKeymap",
     error = "MCPHubError",
+    error_fill = "MCPHubErrorFill",
     warning = "MCPHubWarning",
     info = "MCPHubInfo",
     success = "MCPHubSuccess",
@@ -85,6 +86,11 @@ function M.setup()
             bg = "NONE",
             fg = "#f44747", -- Red for errors
         },
+        [M.groups.error_fill] = {
+            bg = "#f44747", -- Red background
+            fg = "#1a1b26", -- Dark text
+            bold = true,
+        },
         [M.groups.warning] = {
             bg = "NONE",
             fg = "#ff8800", -- Orange for warnings
@@ -100,14 +106,15 @@ function M.setup()
         [M.groups.success_fill] = {
             bg = "#89d185",
             fg = "#1a1b26",
+            bold = true,
         },
         [M.groups.muted] = {
             bg = "NONE",
             fg = "#808080", -- Gray for muted text
         },
         [M.groups.keymap] = {
-            bg = "NONE",
-            fg = "#c0caf5", -- Light blue for keymaps
+            fg = "#ff966c", -- Orange for shortcuts
+            bold = true,
         },
         [M.groups.link] = {
             bg = "NONE",

@@ -2,6 +2,7 @@
 --- Marketplace view for MCPHub UI
 --- Browse, search and install MCP servers
 ---@brief ]]
+local Installers = require("mcphub.utils.installers")
 local NuiLine = require("mcphub.utils.nuiline")
 local State = require("mcphub.state")
 local Text = require("mcphub.utils.text")
@@ -10,102 +11,10 @@ local View = require("mcphub.ui.views.base")
 ---@class MarketplaceView
 ---@field super View
 ---@field active_mode "browse"|"details" Current view mode
----@field selected_server table|nil Currently selected server
--- Helper functions
-local function check_install_helper(name)
-    -- Try to load the module and handle errors quietly
-    local ok = pcall(require, name)
-    return ok
-end
-
 local MarketplaceView = setmetatable({}, {
     __index = View,
 })
 MarketplaceView.__index = MarketplaceView
-
--- Static helper methods
-function MarketplaceView.has_codecompanion()
-    return check_install_helper("codecompanion")
-end
-
-function MarketplaceView:install_with_codecompanion(server)
-    if not server or not server.mcpId then
-        vim.notify("Invalid server data", vim.log.levels.ERROR)
-        return
-    end
-
-    local codecompanion = require("codecompanion")
-    local details = State.marketplace_state.server_details[server.mcpId]
-
-    if not details or not details.data then
-        vim.notify("Server details not available", vim.log.levels.ERROR)
-        return
-    end
-
-    -- Get current config content and path
-    local config_file = State.config.config
-    local config_result = require("mcphub.validation").validate_config_file(config_file)
-    local config_content = config_result.content or "{}"
-
-    -- Get OS info
-    local os_name = vim.loop.os_uname().sysname
-    local is_windows = os_name == "Windows_NT"
-
-    -- Build installation prompt
-    local prompt = string.format(
-        [[
-I need to set up an MCP server. Please help me install it with these requirements:
-
-Environment Details:
-- OS: %s
-- Config Path: %s (make sure we have write access)
-
-Server Details:
-- GitHub URL: %s
-- MCP ID: %s
-
-Tasks:
-1. Read and analyze the current config:
-%s
-
-2. Install the server using %s commands
-   Follow the README instructions below
-
-3. Update the config file at %s
-   Add the new server configuration
-
-4. Verify the installation works
-
-README Content:
--------------
-%s
--------------]],
-        os_name,
-        config_file,
-        server.githubUrl or "unknown URL",
-        server.mcpId,
-        config_content,
-        is_windows and "Windows" or "Unix-like",
-        config_file,
-        details.data.readmeContent or "No README available"
-    )
-
-    -- Show starting notification
-    vim.notify(string.format("Starting installation of %s with CodeCompanion...", server.name), vim.log.levels.INFO)
-
-    -- Send prompt to CodeCompanion
-    local chat = codecompanion.chat()
-    chat:add_message({
-        role = "user",
-        content = prompt,
-    }, {
-        visible = false,
-    })
-    chat:add_buf_message({
-        role = "user",
-        content = "@files Please follow the installation instructions carefully.",
-    })
-end
 
 function MarketplaceView:new(ui)
     local self = View:new(ui, "marketplace") -- Create base view with name
@@ -125,6 +34,84 @@ function MarketplaceView:new(ui)
     return self
 end
 
+-- Extract unique categories and tags from catalog items
+function MarketplaceView:get_available_categories()
+    local categories = {}
+    local seen = {}
+
+    -- Get items from state
+    local items = State.marketplace_state.catalog.items or {}
+
+    for _, item in ipairs(items) do
+        -- Add main category
+        if item.category and not seen[item.category] then
+            seen[item.category] = true
+            table.insert(categories, item.category)
+        end
+
+        -- Add tags
+        if item.tags then
+            for _, tag in ipairs(item.tags) do
+                if not seen[tag] then
+                    seen[tag] = true
+                    table.insert(categories, tag)
+                end
+            end
+        end
+    end
+
+    -- Sort categories alphabetically
+    table.sort(categories)
+
+    return categories
+end
+
+-- Filter and sort catalog items
+function MarketplaceView:filter_and_sort_items(items)
+    if not items or #items == 0 then
+        return {}
+    end
+
+    local filters = State.marketplace_state.filters
+    local filtered = items
+
+    -- Apply search filter
+    if filters.search ~= "" and #filters.search > 0 then
+        filtered = vim.tbl_filter(function(item)
+            local search_text = filters.search:lower()
+            return (item.name and item.name:lower():find(search_text))
+                or (item.description and item.description:lower():find(search_text))
+        end, filtered)
+    end
+
+    -- Apply category filter
+    if filters.category ~= "" then
+        filtered = vim.tbl_filter(function(item)
+            -- Match against main category or tags
+            return (item.category == filters.category) or (item.tags and vim.tbl_contains(item.tags, filters.category))
+        end, filtered)
+    end
+
+    -- Sort results
+    local sort_funcs = {
+        newest = function(a, b)
+            return (a.createdAt or 0) > (b.createdAt or 0)
+        end,
+        stars = function(a, b)
+            return (a.githubStars or 0) > (b.githubStars or 0)
+        end,
+        name = function(a, b)
+            return (a.name or ""):lower() < (b.name or ""):lower()
+        end,
+    }
+
+    if filters.sort and sort_funcs[filters.sort] then
+        table.sort(filtered, sort_funcs[filters.sort])
+    end
+
+    return filtered
+end
+
 function MarketplaceView:before_enter()
     View.before_enter(self)
     self:setup_active_mode()
@@ -141,12 +128,9 @@ function MarketplaceView:after_enter()
             self.cursor_positions.browse_mode[2],
         }
         vim.api.nvim_win_set_cursor(0, new_pos)
-    elseif self.active_mode == "details" and self.cursor_positions.details_mode then
-        local new_pos = {
-            math.min(self.cursor_positions.details_mode[1], line_count),
-            self.cursor_positions.details_mode[2],
-        }
-        vim.api.nvim_win_set_cursor(0, new_pos)
+    elseif self.active_mode == "details" then
+        local install_line = self.interactive_lines[1]
+        vim.api.nvim_win_set_cursor(0, { install_line and install_line.line or 7, 0 })
     end
 end
 
@@ -165,24 +149,95 @@ function MarketplaceView:setup_active_mode()
         self.keymaps = {
             ["/"] = {
                 action = function()
-                    -- TODO: Implement search focus
-                    vim.notify("Search not yet implemented")
+                    vim.ui.input({
+                        prompt = "Search: ",
+                    }, function(input)
+                        local trimmed = input and vim.trim(input)
+                        if trimmed and #trimmed > 0 then -- Only update if input has content
+                            -- When searching, clear category filter
+                            local current = State.marketplace_state.filters or {}
+                            State:update({
+                                marketplace_state = {
+                                    filters = {
+                                        search = input,
+                                        category = "", -- Clear category when searching
+                                        sort = current.sort, -- Preserve sort
+                                    },
+                                },
+                            }, "marketplace")
+                        end
+                    end)
                 end,
                 desc = "Search",
             },
-            ["<Tab>"] = {
+            ["s"] = {
                 action = function()
-                    local current = State.marketplace_state.filters.sort or "newest"
-                    local sorts = { "newest", "stars", "name" }
-                    local next_idx = 1
-                    for i, sort in ipairs(sorts) do
-                        if sort == current then
-                            next_idx = (i % #sorts) + 1
-                            break
+                    local sorts = {
+                        { text = "Newest First", value = "newest" },
+                        { text = "Most Stars", value = "stars" },
+                        { text = "Name (A-Z)", value = "name" },
+                    }
+                    vim.ui.select(sorts, {
+                        prompt = "Sort by:",
+                        format_item = function(item)
+                            return item.text
+                        end,
+                    }, function(choice)
+                        if choice then
+                            State:update({
+                                marketplace_state = {
+                                    filters = {
+                                        sort = choice.value,
+                                    },
+                                },
+                            }, "marketplace")
                         end
+                    end)
+                end,
+                desc = "Sort",
+            },
+            ["c"] = {
+                action = function()
+                    local categories = self:get_available_categories()
+                    table.insert(categories, 1, "All Categories")
+
+                    vim.ui.select(categories, {
+                        prompt = "Filter by category:",
+                    }, function(choice)
+                        if choice then
+                            -- When selecting category, clear search filter
+                            local current = State.marketplace_state.filters or {}
+                            State:update({
+                                marketplace_state = {
+                                    filters = {
+                                        category = choice ~= "All Categories" and choice or "",
+                                        search = "", -- Clear search when filtering by category
+                                        sort = current.sort, -- Preserve sort
+                                    },
+                                },
+                            }, "marketplace")
+                        end
+                    end)
+                end,
+                desc = "Category",
+            },
+            ["<Esc>"] = {
+                action = function()
+                    -- Only clear filters if any are active
+                    local current = State.marketplace_state.filters or {}
+                    if current.category or #(current.search or "") > 0 then
+                        State:update({
+                            marketplace_state = {
+                                filters = {
+                                    sort = current.sort, -- Preserve sort
+                                    search = "",
+                                    category = "",
+                                },
+                            },
+                        }, "marketplace")
                     end
                 end,
-                desc = "Change sort",
+                desc = "Clear filters",
             },
             ["<CR>"] = {
                 action = function()
@@ -197,16 +252,11 @@ function MarketplaceView:setup_active_mode()
                         self:setup_active_mode()
                         -- Fetch details
                         if State.hub_instance then
-                            State.hub_instance:get_marketplace_server_details(server.mcpId, {
-                                callback = function(details, err)
-                                    if err then
-                                        vim.notify("Failed to fetch server details: " .. err, vim.log.levels.ERROR)
-                                    end
-                                    self:draw()
-                                end,
-                            })
+                            State.hub_instance:get_marketplace_server_details(server.mcpId)
                         end
                         self:draw()
+                        local install_line = self.interactive_lines[1]
+                        vim.api.nvim_win_set_cursor(0, { install_line and install_line.line or 7, 0 })
                     end
                 end,
                 desc = "View details",
@@ -236,34 +286,41 @@ function MarketplaceView:setup_active_mode()
                     local cursor = vim.api.nvim_win_get_cursor(0)
                     local type, context = self:get_line_info(cursor[1])
                     if type == "install" then
-                        -- Check for server existence
-                        local current_servers = State.server_state.servers or {}
-                        for _, server in ipairs(current_servers) do
-                            if server.name == context.mcpId then
-                                vim.notify("This MCP server is already installed", vim.log.levels.ERROR)
-                                return
-                            end
-                        end
+                        local is_installed = State:is_server_installed(self.selected_server.mcpId)
 
-                        -- Check for CodeCompanion
-                        if MarketplaceView.has_codecompanion() then
-                            vim.ui.select({ "Yes", "No" }, {
-                                prompt = "Install using CodeCompanion?",
-                            }, function(choice)
-                                if choice == "Yes" then
-                                    -- Close UI first
-                                    if self.ui then
-                                        self.ui:cleanup()
-                                    end
-                                    -- Start installation
-                                    self:install_with_codecompanion(self.selected_server)
-                                end
-                            end)
+                        if is_installed then
+                            -- Handle uninstall
+                            self:handle_uninstall(self.selected_server)
                         else
-                            vim.notify(
-                                "CodeCompanion not found. Please install CodeCompanion or Avante for automated installation.",
-                                vim.log.levels.ERROR
-                            )
+                            -- Get available installers
+                            local available_installers = self:get_available_installers()
+
+                            if #available_installers > 0 then
+                                -- Create selection items with installer names
+                                local items = vim.tbl_map(function(installer)
+                                    return installer.name
+                                end, available_installers)
+
+                                -- Show installer selection
+                                vim.ui.select(items, {
+                                    prompt = "Choose installer:",
+                                }, function(choice)
+                                    if choice then
+                                        -- Find selected installer
+                                        for _, installer in ipairs(available_installers) do
+                                            if installer.name == choice then
+                                                self:handle_install(self.selected_server, installer.id)
+                                                break
+                                            end
+                                        end
+                                    end
+                                end)
+                            else
+                                vim.notify(
+                                    "No installers available. Please install CodeCompanion or Avante.",
+                                    vim.log.levels.ERROR
+                                )
+                            end
                         end
                     end
                 end,
@@ -291,19 +348,38 @@ end
 function MarketplaceView:render_header_controls()
     local lines = {}
     local width = self:get_width() - (Text.HORIZONTAL_PADDING * 2)
+    local filters = State.marketplace_state.filters
 
-    -- Create left and right sections
+    -- Create status sections showing current filters and controls
     local left_section = NuiLine()
-        :append(Text.icons.sort .. " ", Text.highlights.title)
-        :append("Sort: ", Text.highlights.muted)
-        :append("Newest", Text.highlights.info)
+        :append(Text.icons.sort .. " ", Text.highlights.muted)
+        :append("(", Text.highlights.muted)
+        :append("s", Text.highlights.keymap)
+        :append(")", Text.highlights.muted)
+        :append("ort: ", Text.highlights.muted)
+        :append(filters.sort == "" and "stars" or filters.sort, Text.highlights.info)
         :append("  ", Text.highlights.muted)
-        :append(Text.icons.tag .. " ", Text.highlights.title)
-        :append("Category: ", Text.highlights.muted)
-        :append("All", Text.highlights.info)
+        :append(Text.icons.tag .. " ", Text.highlights.muted)
+        :append("(", Text.highlights.muted)
+        :append("c", Text.highlights.keymap)
+        :append(")", Text.highlights.muted)
+        :append("ategory: ", Text.highlights.muted)
+        :append(filters.category == "" and "All" or filters.category, Text.highlights.info)
+
+    -- Show filter clear hint if any filters active
+    local has_filters = filters.category ~= "" or #(filters.search or "") > 0
+    if has_filters then
+        left_section
+            :append(" (", Text.highlights.muted)
+            :append("<Esc>", Text.highlights.keymap)
+            :append(" to clear)", Text.highlights.muted)
+    end
 
     local right_section =
-        NuiLine():append(Text.icons.search .. " ", Text.highlights.title):append("/ to search", Text.highlights.muted)
+        NuiLine():append("/", Text.highlights.keymap):append(" Search: ", Text.highlights.muted):append(
+            filters.search == "" and "" or filters.search,
+            #(filters.search or "") > 0 and Text.highlights.info or Text.highlights.muted
+        )
 
     -- Calculate padding needed between sections
     local total_content_width = left_section:width() + right_section:width()
@@ -313,47 +389,40 @@ function MarketplaceView:render_header_controls()
     local controls_line = NuiLine():append(left_section):append(string.rep(" ", padding)):append(right_section)
 
     table.insert(lines, Text.pad_line(controls_line))
-    table.insert(lines, self:divider())
 
     return lines
 end
 
-function MarketplaceView:fetch_catalog()
-    local filters = State.marketplace_state.filters or {}
-    if State.hub_instance then
-        State.hub_instance:get_marketplace_catalog({
-            sort = filters.sort,
-            category = filters.category,
-            search = filters.search,
-            callback = function(_, err)
-                if err then
-                    vim.notify("Failed to fetch marketplace: " .. err, vim.log.levels.ERROR)
-                end
-                self:draw()
-            end,
-        })
-    end
-end
-
-function MarketplaceView:render_server_card(server, index)
+function MarketplaceView:render_server_card(server, index, line_offset)
     local lines = {}
-    local width = self:get_width() - (Text.HORIZONTAL_PADDING * 2)
+    local is_installed = State:is_server_installed(server.mcpId)
 
     -- Create server name section (left part)
-    local name_section = NuiLine()
-        :append(Text.icons.triangleRight .. " ", Text.highlights.info)
-        :append(server.name, Text.highlights.info)
+    local name_section = NuiLine():append(
+        tostring(index) .. ") " .. server.name,
+        is_installed and Text.highlights.success or Text.highlights.title
+    )
+
+    -- Show checkmark if installed
+    if is_installed then
+        name_section:append(" ", Text.highlights.muted):append(Text.icons.install, Text.highlights.success)
+    end
 
     -- Create metadata section (right part)
     local meta_section = NuiLine()
+
+    -- Add recommended badge if server is recommended
+    if server.isRecommended then
+        meta_section:append(Text.icons.sparkles .. " ", Text.highlights.success)
+    end
+
+    -- Show stars and downloads
+    meta_section
         :append(Text.icons.favorite, Text.highlights.muted)
-        :append("" .. (server.githubStars or "0"), Text.highlights.muted)
-    -- :append(" | ", Text.highlights.muted)
-    -- :append(Text.icons.octoface .. " ", Text.highlights.title)
-    -- :append(server.author, Text.highlights.muted)
-    -- :append(" | ", Text.highlights.muted)
-    -- :append(Text.icons.tag .. " ", Text.highlights.title)
-    -- :append(server.category, Text.highlights.muted)
+        :append(" " .. (server.githubStars or "0"), Text.highlights.muted)
+        :append(" ", Text.highlights.muted)
+        :append(Text.icons.download, Text.highlights.muted)
+        :append(" " .. (server.downloadCount or "0"), Text.highlights.muted)
 
     -- Calculate padding between name and metadata
     local padding = 2 -- width - (name_section:width() + meta_section:width())
@@ -362,7 +431,7 @@ function MarketplaceView:render_server_card(server, index)
     local title_line = NuiLine():append(name_section):append(string.rep(" ", padding)):append(meta_section)
 
     -- Track line for server selection (storing only id)
-    self:track_line(index, "server", {
+    self:track_line(line_offset, "server", {
         type = "server",
         mcpId = server.mcpId,
         hint = "Press <CR> for details",
@@ -382,12 +451,10 @@ end
 function MarketplaceView:render_browse_mode(line_offset)
     local lines = {}
 
-    -- Render controls
-    vim.list_extend(lines, self:render_header_controls())
-
     -- Show appropriate state
     local state = State.marketplace_state
     if state.status == "loading" then
+        table.insert(lines, NuiLine())
         table.insert(lines, Text.pad_line(NuiLine():append("Loading marketplace catalog...", Text.highlights.muted)))
     elseif state.status == "error" then
         table.insert(
@@ -399,17 +466,35 @@ function MarketplaceView:render_browse_mode(line_offset)
             )
         )
     else
-        -- Show server catalog
-        local items = state.catalog.items
-        if #items == 0 then
-            table.insert(
-                lines,
-                Text.pad_line(NuiLine():append("No servers found in marketplace", Text.highlights.muted))
-            )
+        -- Get filtered and sorted items
+        local all_items = state.catalog.items or {}
+        local filtered_items = self:filter_and_sort_items(all_items)
+
+        -- Show result count if filters are active
+        if #(state.filters.search or "") > 0 or state.filters.category ~= "" then
+            local count_line = NuiLine()
+                :append("Found ", Text.highlights.muted)
+                :append(tostring(#filtered_items), Text.highlights.info)
+                :append(" of ", Text.highlights.muted)
+                :append(tostring(#all_items), Text.highlights.muted)
+                :append(" servers", Text.highlights.muted)
+            table.insert(lines, Text.pad_line(count_line))
+            table.insert(lines, Text.empty_line())
+        end
+
+        -- Show filtered catalog
+        if #filtered_items == 0 then
+            if #all_items == 0 then
+                table.insert(
+                    lines,
+                    Text.pad_line(NuiLine():append("No servers found in marketplace", Text.highlights.muted))
+                )
+            else
+                table.insert(lines, Text.pad_line(NuiLine():append("No matching servers found", Text.highlights.muted)))
+            end
         else
-            for i, server in ipairs(items) do
-                -- Pass current line number considering line_offset
-                vim.list_extend(lines, self:render_server_card(server, #lines + line_offset + 1))
+            for i, server in ipairs(filtered_items) do
+                vim.list_extend(lines, self:render_server_card(server, i, #lines + line_offset + 1))
             end
         end
     end
@@ -426,21 +511,28 @@ function MarketplaceView:render_details_mode(line_offset)
 
     -- Description
     if server.description then
-        table.insert(lines, Text.multiline(server.description, Text.highlights.muted))
+        vim.list_extend(lines, vim.tbl_map(Text.pad_line, Text.multiline(server.description, Text.highlights.muted)))
     end
+
+    table.insert(lines, Text.empty_line())
 
     -- Server info section
     local info_lines = {
         {
-            label = "URL   ",
-            icon = Text.icons.event,
+            label = "URL      ",
+            icon = Text.icons.link,
             value = server.githubUrl,
             is_url = true,
         },
         {
-            label = "Author",
+            label = "Author   ",
             icon = Text.icons.octoface,
             value = server.author or "Unknown",
+        },
+        {
+            label = "Downloads",
+            icon = Text.icons.download,
+            value = tostring(server.downloadCount or "0"),
         },
     }
 
@@ -451,7 +543,7 @@ function MarketplaceView:render_details_mode(line_offset)
             category_value = category_value .. " [" .. table.concat(server.tags, ", ") .. "]"
         end
         table.insert(info_lines, {
-            label = "Tags  ",
+            label = "Tags     ",
             icon = Text.icons.tag,
             value = server.category,
             suffix = type(server.tags) == "table"
@@ -465,12 +557,9 @@ function MarketplaceView:render_details_mode(line_offset)
     for _, info in ipairs(info_lines) do
         if info.value then
             local line = NuiLine()
-                -- :append(info.icon .. "", Text.highlights.title)
-                :append(
-                    info.label .. " : ",
-                    Text.highlights.muted
-                )
-                :append(info.value, info.is_url and Text.highlights.link or Text.highlights.info)
+                :append(info.icon .. "  ", Text.highlights.title)
+                :append(info.label .. " : ", Text.highlights.muted)
+                :append(info.value, info.is_url and Text.highlights.link or info.highlight or Text.highlights.info)
 
             if info.suffix then
                 line:append(info.suffix, Text.highlights.muted)
@@ -481,35 +570,68 @@ function MarketplaceView:render_details_mode(line_offset)
     end
     table.insert(lines, Text.pad_line(NuiLine()))
 
-    -- Install button (capability-style highlight)
+    -- Install section
     if server.mcpId then
-        local install_line = NuiLine():append("[ Install ]", Text.highlights.active_item)
-        table.insert(lines, Text.pad_line(install_line))
+        local details = State.marketplace_state.server_details[server.mcpId]
+        local is_loading = details == nil
+        local is_installed = State:is_server_installed(server.mcpId)
 
-        -- Track install button
-        self:track_line(#lines + line_offset, "install", {
-            type = "install",
-            mcpId = server.mcpId,
-            server = server, -- Keep server info for installation
-            hint = "Press <CR> to install",
-        })
+        -- Install/Uninstall button
+        local button_text = is_loading and "Loading..." or (is_installed and "Uninstall" or "Install")
+        local button_hl = is_loading and Text.highlights.muted
+            or (is_installed and Text.highlights.error_fill or Text.highlights.active_item)
+        local icon = is_loading and Text.icons.loading or (is_installed and Text.icons.uninstall or Text.icons.install)
+        local button_line = NuiLine():append(" " .. icon .. " " .. button_text .. " ", button_hl)
+        if not is_installed and not is_loading then
+            button_line:append(" with: ", Text.highlights.muted)
 
+            -- Check each installer
+            local has_installers = false
+            for id, installer in pairs(Installers) do
+                if installer.check() then
+                    has_installers = true
+                    button_line
+                        :append("[" .. installer.name .. "]", Text.highlights.success)
+                        :append(" ", Text.highlights.muted)
+                        :append(Text.icons.check, Text.highlights.success)
+                        :append("  ", Text.highlights.muted)
+                else
+                    button_line
+                        :append("[" .. installer.name .. "]", Text.highlights.error)
+                        :append(" ", Text.highlights.muted)
+                        :append(Text.icons.uninstall, Text.highlights.error)
+                        :append("  ", Text.highlights.muted)
+                end
+            end
+        end
+        table.insert(lines, Text.pad_line(button_line))
+
+        -- Track install/uninstall button only when details are loaded
+        if details then
+            self:track_line(#lines + line_offset, "install", {
+                type = is_installed and "uninstall" or "install",
+                mcpId = server.mcpId,
+                server = server,
+                hint = is_installed and "Press <CR> to uninstall" or "Press <CR> to install",
+            })
+        end
         table.insert(lines, Text.pad_line(NuiLine()))
         table.insert(lines, self:divider())
+        table.insert(lines, Text.pad_line(NuiLine()))
     end
 
-    -- Readme section with safety checks
+    -- Readme section
     local details = State.marketplace_state.server_details[server.mcpId]
     if details and details.data and type(details.data.readmeContent) == "string" then
         local readme = details.data.readmeContent
         if #readme > 0 then
-            table.insert(lines, Text.pad_line(NuiLine():append("README", Text.highlights.title)))
+            table.insert(
+                lines,
+                self:center(NuiLine():append(" " .. Text.icons.resource .. " README ", Text.highlights.header))
+            )
             table.insert(lines, Text.pad_line(NuiLine()))
-            for _, line in ipairs(vim.split(readme, "\n")) do
-                if type(line) == "string" then
-                    table.insert(lines, Text.pad_line(NuiLine():append(line, Text.highlights.muted)))
-                end
-            end
+            vim.list_extend(lines, vim.tbl_map(Text.pad_line, Text.multiline(readme)))
+            table.insert(lines, Text.pad_line(NuiLine()))
         end
     end
 
@@ -517,20 +639,31 @@ function MarketplaceView:render_details_mode(line_offset)
 end
 
 function MarketplaceView:render()
+    -- Handle special states from base view
+    if State.setup_state == "failed" or State.setup_state == "in_progress" then
+        return View.render(self)
+    end
     -- Get base header
     local lines = self:render_header(false)
 
     -- Add title/breadcrumb
     if self.active_mode == "browse" then
-        table.insert(lines, Text.pad_line(NuiLine():append("Marketplace", Text.highlights.title)))
+        -- Render controls
+        vim.list_extend(lines, self:render_header_controls())
     elseif self.selected_server then
-        local breadcrumb = NuiLine()
-            :append("Marketplace > ", Text.highlights.muted)
-            :append(self.selected_server.name, Text.highlights.title)
+        local is_installed = State:is_server_installed(self.selected_server.mcpId)
+        local breadcrumb = NuiLine():append("Marketplace > ", Text.highlights.muted):append(
+            self.selected_server.name,
+            is_installed and Text.highlights.success or Text.highlights.title
+        )
+        if is_installed then
+            breadcrumb:append(" ", Text.highlights.muted):append(Text.icons.install, Text.highlights.success)
+        end
         if self.selected_server.githubStars and self.selected_server.githubStars > 0 then
-            breadcrumb
-                :append(" (" .. Text.icons.favorite, Text.highlights.muted)
-                :append(tostring(self.selected_server.githubStars) .. ")", Text.highlights.muted)
+            breadcrumb:append(
+                " (" .. Text.icons.favorite .. " " .. tostring(self.selected_server.githubStars) .. ")",
+                Text.highlights.muted
+            )
         end
         table.insert(lines, Text.pad_line(breadcrumb))
     else
@@ -553,4 +686,90 @@ function MarketplaceView:render()
     return lines
 end
 
+-- Get available installers
+function MarketplaceView:get_available_installers()
+    local available = {}
+    for id, installer in pairs(Installers) do
+        if installer.check() then
+            table.insert(available, {
+                id = id,
+                name = installer.name,
+            })
+        end
+    end
+    return available
+end
+
+function MarketplaceView:handle_install(server, installer_id)
+    local installer = Installers[installer_id]
+    if installer then
+        self.ui:cleanup()
+        installer.install(self, server)
+    end
+end
+
+-- Helper to get server state from State
+function MarketplaceView:get_server_state(mcpId)
+    if State.server_state and State.server_state.servers then
+        for _, server in ipairs(State.server_state.servers) do
+            if server.name == mcpId then
+                return server
+            end
+        end
+    end
+    return nil
+end
+-- Handle installation with selected installer
+function MarketplaceView:handle_uninstall(server)
+    -- Get config file path and server status
+    local config_file = State.config.config
+    local server_state = self:get_server_state(server.mcpId)
+
+    vim.ui.select({ "Yes", "No" }, {
+        prompt = string.format(
+            "Are you sure you want to uninstall '%s'?\nThis will remove its configuration from %s",
+            server.name,
+            config_file
+        ),
+    }, function(choice)
+        if choice == "Yes" then
+            -- Close UI first as config might be reloaded
+            self.ui:cleanup()
+            -- Function to remove server config
+            local function remove_config()
+                local success, _ = State.hub_instance:remove_server_config(server.mcpId)
+                if success then
+                    vim.notify(string.format("Successfully uninstalled %s", server.name), vim.log.levels.INFO)
+                else
+                    vim.notify(
+                        string.format("Failed to uninstall %s. Check logs for details.", server.name),
+                        vim.log.levels.ERROR
+                    )
+                end
+            end
+
+            -- If server is running, stop it first
+            if server_state and server_state.status == "connected" then
+                if State.hub_instance then
+                    State.hub_instance:stop_mcp_server(server.mcpId, false, {
+                        callback = function(_, err)
+                            if err then
+                                vim.notify(
+                                    string.format("Failed to stop %s: %s", server.name, err),
+                                    vim.log.levels.ERROR
+                                )
+                                return
+                            end
+                            -- After stopping, remove config
+                            remove_config()
+                        end,
+                    })
+                end
+            else
+                -- Server not running, just remove config
+                remove_config()
+            end
+        end
+    end)
+end
 return MarketplaceView

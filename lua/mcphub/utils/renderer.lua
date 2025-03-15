@@ -38,9 +38,10 @@ end
 ---@return { line: NuiLine, mapping: table? }
 function M.render_server_line(server, active)
     local status = M.get_server_status_info(server.status, active)
-    local line = NuiLine()
-        :append(status.icon, status.hl)
-        :append(server.name, server.status == "connected" and Text.highlights.success or status.hl)
+    local line = NuiLine():append(status.icon, status.hl):append(
+        server.displayName or server.name,
+        server.status == "connected" and Text.highlights.success or status.hl
+    )
 
     -- Add error message for disconnected servers
     if server.error ~= vim.NIL and server.status == "disconnected" and server.error ~= "" then
