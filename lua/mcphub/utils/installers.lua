@@ -39,9 +39,15 @@ local Installers = {
                 return
             end
             local sidebar = require("avante").get()
-            sidebar:clear_history()
+            sidebar:new_chat()
+            sidebar:add_chat_history({
+                role = "user",
+                content = prompt,
+            }, {
+                visible = false,
+            })
             local api = require("avante.api")
-            api.ask(prompt)
+            api.ask({ question = "@read_global_file @write_global_file Please follow the provided instructions carefully to install this MCP server", without_selection = true })
         end,
     },
     codecompanion = {
