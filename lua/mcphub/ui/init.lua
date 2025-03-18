@@ -30,6 +30,10 @@ function UI:new()
     }
     setmetatable(instance, self)
 
+    -- Setup highlights with auto-update
+    hl.setup()
+    hl.setup_auto_update()
+
     -- Initialize views
     instance:init_views()
 
@@ -150,8 +154,7 @@ function UI:create_window()
         border = "rounded",
     })
 
-    -- Set up and apply window highlights
-    hl.setup()
+    -- Apply window highlights
     vim.api.nvim_win_set_option(
         self.window,
         "winhl",
