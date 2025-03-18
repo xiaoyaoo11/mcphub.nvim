@@ -57,7 +57,7 @@ function M.setup()
     -- Get UI colors
     local pmenu_sel_bg = get_color("PmenuSel", "bg", "#444444")
     local pmenu_sel_fg = get_color("PmenuSel", "fg", "#d4d4d4")
-    local special_key = get_color("Identifier", "fg", "#ff966c")
+    local special_key = get_color("Special", "fg", "#ff966c")
     local title_color = get_color("Title", "fg", "#c792ea")
 
     local highlights = {
