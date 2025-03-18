@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.4.0] - 2025-03-18
+
+### Added
+
+- Added dynamic colorscheme adaptation for UI highlights
+  - Highlights now automatically update when colorscheme changes
+  - Uses semantic colors from current theme
+  - Falls back to sensible defaults when colors not available
+
+### Changed
+
+- Changed special key highlighting to use Special group instead of Identifier
+
 ## [3.3.1] - 2025-03-16
 
 ### Fixed
