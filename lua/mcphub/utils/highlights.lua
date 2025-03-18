@@ -24,113 +24,153 @@ M.groups = {
     link = "MCPHubLink",
 }
 
+-- Get highlight attributes from a highlight group
+local function get_hl_attrs(name)
+    local ok, hl = pcall(vim.api.nvim_get_hl, 0, { name = name })
+    if not ok or not hl then
+        return {}
+    end
+    return hl
+end
+
+-- Get color from highlight group or fallback
+local function get_color(group, attr, fallback)
+    local hl = get_hl_attrs(group)
+    return hl[attr] and string.format("#%06x", hl[attr]) or fallback
+end
+
 -- Setup highlight groups
 function M.setup()
+    -- Get colors from current theme
+    local normal_bg = get_color("Normal", "bg", "#1a1b26")
+    local normal_fg = get_color("Normal", "fg", "#c0caf5")
+    local float_bg = get_color("NormalFloat", "bg", normal_bg)
+    local border_color = get_color("FloatBorder", "fg", "#555555")
+    local comment_fg = get_color("Comment", "fg", "#808080")
+
+    -- Get semantic colors
+    local error_color = get_color("DiagnosticError", "fg", "#f44747")
+    local warn_color = get_color("DiagnosticWarn", "fg", "#ff8800")
+    local info_color = get_color("DiagnosticInfo", "fg", "#4fc1ff")
+    local hint_color = get_color("DiagnosticHint", "fg", "#89d185")
+
+    -- Get UI colors
+    local pmenu_sel_bg = get_color("PmenuSel", "bg", "#444444")
+    local pmenu_sel_fg = get_color("PmenuSel", "fg", "#d4d4d4")
+    local special_key = get_color("Special", "fg", "#ff966c")
+    local title_color = get_color("Title", "fg", "#c792ea")
+
     local highlights = {
         -- Window elements
         [M.groups.window_normal] = {
-            bg = "#1a1b26",
-            fg = "#c0caf5",
+            bg = float_bg,
+            fg = normal_fg,
         },
         [M.groups.window_border] = {
             bg = "NONE",
-            fg = "#555555", -- Dark gray for border
-            special = "#555555", -- Match border char color
+            fg = border_color,
+            special = border_color,
         },
 
         -- Title and headers
         [M.groups.title] = {
             bg = "NONE",
-            fg = "#c792ea", -- Purple for titles
+            fg = title_color,
             bold = true,
         },
         [M.groups.header] = {
-            bg = "#444444",
-            fg = "#d4d4d4", -- Light gray for normal text
+            bg = pmenu_sel_bg,
+            fg = pmenu_sel_fg,
         },
         [M.groups.header_btn] = {
-            fg = "#222222",
-            bg = "#c792ea",
+            fg = normal_bg,
+            bg = title_color,
             bold = true,
         },
         [M.groups.header_accent] = {
-            bg = "#333333",
-            fg = "#c792ea", -- Purple for accents
+            bg = pmenu_sel_bg,
+            fg = title_color,
             bold = true,
         },
         [M.groups.header_btn_shortcut] = {
-            bg = "#c792ea",
-            fg = "#111111",
+            bg = title_color,
+            fg = normal_bg,
             bold = true,
         },
         [M.groups.header_shortcut] = {
-            bg = "#444444",
-            fg = "#ff966c", -- Orange for shortcuts
+            bg = pmenu_sel_bg,
+            fg = special_key,
             bold = true,
         },
 
         -- Interactive elements
         [M.groups.active_item] = {
-            fg = "#111111",
-            bg = "#89d185",
+            fg = normal_bg,
+            bg = hint_color,
             bold = true,
         },
-        -- Interactive elements
         [M.groups.active_item_muted] = {
-            bg = "#89d185",
-            fg = "#555555",
+            bg = hint_color,
+            fg = comment_fg,
             bold = true,
         },
+
         -- Status and messages
         [M.groups.error] = {
             bg = "NONE",
-            fg = "#f44747", -- Red for errors
+            fg = error_color,
         },
         [M.groups.error_fill] = {
-            bg = "#f44747", -- Red background
-            fg = "#1a1b26", -- Dark text
+            bg = error_color,
+            fg = normal_bg,
             bold = true,
         },
         [M.groups.warning] = {
             bg = "NONE",
-            fg = "#ff8800", -- Orange for warnings
+            fg = warn_color,
         },
         [M.groups.info] = {
             bg = "NONE",
-            fg = "#4fc1ff", -- Light blue for info
+            fg = info_color,
         },
         [M.groups.success] = {
             bg = "NONE",
-            fg = "#89d185", -- Green for success
+            fg = hint_color,
         },
         [M.groups.success_fill] = {
-            bg = "#89d185",
-            fg = "#1a1b26",
+            bg = hint_color,
+            fg = normal_bg,
             bold = true,
         },
         [M.groups.muted] = {
             bg = "NONE",
-            fg = "#808080", -- Gray for muted text
+            fg = comment_fg,
         },
         [M.groups.keymap] = {
-            fg = "#ff966c", -- Orange for shortcuts
+            fg = special_key,
             bold = true,
         },
         [M.groups.link] = {
             bg = "NONE",
-            fg = "#4fc1ff", -- Light blue for links
-            underline = true, -- Underline to indicate clickable
+            fg = info_color,
+            underline = true,
         },
     }
 
-    -- -- Clear any existing highlights
-    -- for name, _ in pairs(highlights) do
-    --     vim.api.nvim_set_hl(0, name, {})
-    -- end
-    -- Set new highlights
+    -- Set highlights
     for name, val in pairs(highlights) do
         vim.api.nvim_set_hl(0, name, val)
     end
+end
+
+-- Setup an autocmd to update highlights when colorscheme changes
+function M.setup_auto_update()
+    local group = vim.api.nvim_create_augroup("MCPHubHighlights", { clear = true })
+    vim.api.nvim_create_autocmd("ColorScheme", {
+        group = group,
+        callback = M.setup,
+        desc = "Update MCPHub highlights when colorscheme changes",
+    })
 end
 
 return M
