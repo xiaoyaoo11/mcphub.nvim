@@ -45,7 +45,6 @@ function MCPHub:new(opts)
     -- Set up instance fields
     self.port = opts.port
     self.config = opts.config
-    self.shutdown_delay = opts.shutdown_delay or 0
     self.ready = false
     self.server_job = nil
     self.is_owner = false -- Whether we started the server
@@ -93,7 +92,7 @@ function MCPHub:start(opts, restart_callback)
 
         self.server_job = Job:new({
             command = "mcp-hub",
-            args = { "--port", tostring(self.port), "--config", self.config, "--shutdown-delay", self.shutdown_delay },
+            args = { "--port", tostring(self.port), "--config", self.config },
             detached = true,
             on_stdout = vim.schedule_wrap(function(_, data)
                 if has_called_restart_callback == false then
@@ -648,11 +647,11 @@ function MCPHub:stop()
         },
     })
 
-    if self.is_owner then
-        if self.server_job then
-            self.server_job:shutdown()
-        end
-    end
+    -- if self.is_owner then
+    --     if self.server_job then
+    --         self.server_job:shutdown()
+    --     end
+    -- end
 
     State:update({
         server_state = {

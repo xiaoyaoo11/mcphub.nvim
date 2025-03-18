@@ -38,7 +38,6 @@ function M.setup(opts)
     local config = vim.tbl_deep_extend("force", {
         port = nil,
         config = nil,
-        shutdown_delay = 0, -- wait 10s before shutting down server after exiting neovim
         log = {
             level = vim.log.levels.ERROR,
             to_file = false,

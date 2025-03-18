@@ -91,7 +91,6 @@ Using [lazy.nvim](https://github.com/folke/lazy.nvim):
             on_error = function(err)
                 -- Called on errors
             end,
-            shutdown_delay = 0, -- Wait 0ms before shutting down server after last client exits
             log = {
                 level = vim.log.levels.WARN,
                 to_file = false,
@@ -322,7 +321,6 @@ MCPHub.nvim uses an Express server to manage MCP servers and handle client reque
 4. When Neovim instances close:
    - Unregister as clients
    - Last client triggers shutdown timer
-   - Server waits shutdown_delay seconds before stopping
    - Timer cancels if new client connects
 
 This architecture ensures:
