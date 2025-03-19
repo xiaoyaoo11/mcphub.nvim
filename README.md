@@ -47,6 +47,7 @@ Thank you to the following people:
   - Dynamically enable/disable servers and tools to optimize token usage
   - Start/stop servers with persistent state
   - Enable/disable specific tools per server
+  - Configure custom instructions per server
   - State persists across restarts
 - **Marketplace Integration**
   - Browse available MCP servers with details and stats
