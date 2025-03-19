@@ -433,6 +433,7 @@ sequenceDiagram
 
 ## 🚧 TODO
 
+- [ ] Neovim MCP Server (kind of) with better editing, diffs, terminal integration etc (Ideas are welcome)
 - [ ] Enhanced help view with comprehensive documentation
 
 ## 👏 Acknowledgements
