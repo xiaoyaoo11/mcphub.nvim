@@ -4,6 +4,7 @@
 --- https://github.com/RooVetGit/Roo-Code
 ---@brief ]]
 local M = {}
+local State = require("mcphub.state")
 
 local function get_header()
     return [[
@@ -12,6 +13,16 @@ MCP SERVERS
 The Model Context Protocol (MCP) enables communication between the system and locally running MCP servers that provide additional tools and resources to extend your capabilities.
 
 # Connected MCP Servers]]
+end
+
+local function format_custom_instructions(server_name)
+    local server_config = State.servers_config[server_name] or {}
+    local custom_instructions = server_config.custom_instructions or {}
+
+    if custom_instructions.text and custom_instructions.text ~= "" and not custom_instructions.disabled then
+        return string.format("\n\n### Instructions for `%s` server\n\n" .. custom_instructions.text, server_name)
+    end
+    return ""
 end
 
 local function format_tools(tools)
@@ -119,6 +130,11 @@ function M.get_active_servers_prompt(servers)
         then
             -- Add server section
             prompt = prompt .. string.format("\n\n## %s", server.name)
+
+            -- Add custom instructions if any
+            prompt = prompt .. format_custom_instructions(server.name)
+
+            -- Add capabilities
             prompt = prompt .. format_tools(server.capabilities.tools)
             prompt = prompt .. format_resources(server.capabilities.resources)
         end

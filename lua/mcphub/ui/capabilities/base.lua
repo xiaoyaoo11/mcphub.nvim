@@ -100,7 +100,7 @@ function CapabilityHandler:render_section_start(title, highlight)
     table.insert(
         lines,
         Text.pad_line(
-            NuiLine():append("╭─ ", highlights.muted):append(" " .. title .. " ", highlight or highlights.header)
+            NuiLine():append("╭─", highlights.muted):append(" " .. title .. " ", highlight or highlights.header)
         )
     )
     return lines
@@ -122,7 +122,7 @@ function CapabilityHandler:render_section_content(content, indent_level)
 end
 
 function CapabilityHandler:render_section_end()
-    return { Text.pad_line(NuiLine():append("╰─", highlights.muted):append(" ", highlights.muted)) }
+    return { Text.pad_line(NuiLine():append("╰─", highlights.muted)) }
 end
 
 -- Common result rendering

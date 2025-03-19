@@ -66,6 +66,7 @@ function MainView:handle_action()
                         tracked.type == "tool"
                         or tracked.type == "resource"
                         or tracked.type == "resourceTemplate"
+                        or tracked.type == "customInstructions"
                     then
                         if tracked.context.server_name == context.name and not first_cap_line then
                             first_cap_line = tracked.line
@@ -87,16 +88,24 @@ function MainView:handle_action()
                 end
             end
         end
-    elseif (type == "tool" or type == "resource" or type == "resourceTemplate") and context then
+    elseif
+        (type == "tool" or type == "resource" or type == "resourceTemplate" or type == "customInstructions") and context
+    then
         -- Check if tool is disabled
         local is_tool_disabled = false
         if type == "tool" then
             local server_config = State.servers_config[context.server_name] or {}
             local disabled_tools = server_config.disabled_tools or {}
             is_tool_disabled = vim.tbl_contains(disabled_tools, context.name)
+            if is_tool_disabled then
+                return
+            end
         end
-        if is_tool_disabled then
-            return
+        if type == "customInstructions" then
+            local is_disabled = context.disabled
+            if is_disabled then
+                return
+            end
         end
 
         -- Store browse mode position before entering capability
@@ -210,7 +219,27 @@ function MainView:handle_server_toggle()
             end
 
             State.hub_instance:update_tool_config(context.server_name, context.name, not is_disabled)
-            self:draw()
+            -- self:draw()
+        end
+    elseif type == "customInstructions" and context then
+        -- Toggle custom instructions state
+        if State.hub_instance then
+            local server_config = State.servers_config[context.server_name] or {}
+            local custom_instructions = server_config.custom_instructions or {}
+            local is_disabled = custom_instructions.disabled
+
+            if is_disabled then
+                vim.notify("Enabling custom instructions for: " .. context.server_name)
+            else
+                vim.notify("Disabling custom instructions for: " .. context.server_name)
+            end
+
+            State.hub_instance:update_server_config(context.server_name, {
+                custom_instructions = vim.tbl_extend("force", custom_instructions, {
+                    disabled = not is_disabled,
+                }),
+            })
+            -- self:draw()
         end
     end
 end
@@ -421,6 +450,7 @@ function MainView:render_servers(line_offset)
 
         -- Show expanded server capabilities
         if server.status == "connected" and server.capabilities and self.expanded_server == server.name then
+            local server_config = State.servers_config[server.name] or {}
             if
                 #server.capabilities.tools + #server.capabilities.resources + #server.capabilities.resourceTemplates
                 == 0
@@ -432,6 +462,26 @@ function MainView:render_servers(line_offset)
                 table.insert(lines, Text.empty_line())
                 current_line = current_line + 2
             end
+
+            local custom_instructions = server_config.custom_instructions or {}
+            local is_disabled = custom_instructions.disabled == true
+            local has_instructions = custom_instructions.text and #custom_instructions.text > 0
+            local ci_line = NuiLine()
+                :append(is_disabled and Text.icons.circle or Text.icons.arrowRight, Text.highlights.muted)
+                :append(
+                    " Custom Instructions" .. (not is_disabled and not has_instructions and " (empty)" or ""),
+                    (is_disabled or not has_instructions) and Text.highlights.muted or Text.highlights.info
+                )
+            table.insert(lines, Text.pad_line(ci_line, nil, 5))
+            current_line = current_line + 1
+            self:track_line(current_line, "customInstructions", {
+                server_name = server.name,
+                disabled = is_disabled,
+                name = Text.icons.instructions .. " Custom Instructions",
+                hint = is_disabled and "Press 't' to enable instructions" or "Press <CR> to edit, 't' to disable",
+            })
+            table.insert(lines, Text.empty_line())
+            current_line = current_line + 1
             -- Tools section if any
             if #server.capabilities.tools > 0 then
                 local section_lines, new_line, mappings =

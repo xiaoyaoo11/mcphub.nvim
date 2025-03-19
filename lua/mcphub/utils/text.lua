@@ -41,6 +41,9 @@ M.icons = {
     download = "",
     install = "",
     link = "",
+    pencil = "󰏫",
+    edit = "󰏫",
+    instructions = "",
 
     -- Error type icons
     setup_error = "",

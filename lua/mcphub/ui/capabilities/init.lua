@@ -5,6 +5,7 @@ M.handlers = {
     tool = require("mcphub.ui.capabilities.tool"),
     resource = require("mcphub.ui.capabilities.resource"),
     resourceTemplate = require("mcphub.ui.capabilities.resourceTemplate"),
+    customInstructions = require("mcphub.ui.capabilities.customInstructions"),
 }
 
 -- Create a new capability handler instance

@@ -50,10 +50,19 @@ function M.render_server_line(server, active)
         line:append(" - ", Text.highlights.muted):append(error_lines[1], Text.highlights.error)
     end
 
+    -- Add custom instructions icon if present
+    local server_config = State.servers_config[server.name] or {}
+
     -- Add capabilities counts inline for connected servers
     if server.status == "connected" and server.capabilities then
+        if server_config.custom_instructions and server_config.custom_instructions.text ~= "" then
+            local is_disabled = server_config.custom_instructions.disabled
+            line:append(
+                " " .. Text.icons.instructions .. " ",
+                is_disabled and Text.highlights.muted or Text.highlights.success
+            )
+        end
         if #server.capabilities.tools > 0 then
-            local server_config = State.servers_config[server.name] or {}
             local disabled_tools = server_config.disabled_tools or {}
             local enabled_tools = #server.capabilities.tools - #disabled_tools
 
@@ -82,176 +91,6 @@ function M.render_server_line(server, active)
     end
 
     return line
-end
-
---- Render server details with capabilities
----@param server table Server data
----@param line_offset number Current line offset
----@param options? { expanded: boolean } Render options
----@return { lines: NuiLine[], mappings: table[] }
-function M.render_server_details(server, line_offset, options)
-    options = options or {
-        expanded = true,
-    }
-    local lines = {}
-    local mappings = {}
-    local current_line = line_offset
-
-    -- Render server line
-    local server_render = M.render_server_line(server)
-    table.insert(lines, Text.pad_line(server_render.line, nil, 4))
-    current_line = current_line + 1
-
-    -- Track server line
-    if server_render.mapping then
-        server_render.mapping.line = current_line
-        table.insert(mappings, server_render.mapping)
-    end
-
-    -- Show capabilities based on view mode
-    if server.capabilities then
-        if options.expanded then
-            -- Server details
-            if server.uptime then
-                local uptime = NuiLine():append("│ ", Text.highlights.muted):append(
-                    string.format("Uptime: %s", utils.format_uptime(server.uptime)),
-                    Text.highlights.muted
-                )
-                table.insert(lines, Text.pad_line(uptime))
-                current_line = current_line + 1
-            end
-
-            -- Show capabilities only for connected servers
-            if server.status == "connected" and server.capabilities then
-                -- Show tools section
-                table.insert(lines, Text.pad_line(NuiLine():append("│", Text.highlights.muted)))
-                current_line = current_line + 1
-
-                table.insert(
-                    lines,
-                    Text.pad_line(
-                        NuiLine():append("│ ", Text.highlights.muted):append("Tools:", Text.highlights.muted)
-                    )
-                )
-                current_line = current_line + 1
-
-                -- Show tools if any
-                if #server.capabilities.tools > 0 then
-                    for _, tool in ipairs(server.capabilities.tools) do
-                        local tool_line = NuiLine()
-                            :append("│  • ", Text.highlights.muted)
-                            :append(tool.name, Text.highlights.success)
-                        table.insert(lines, Text.pad_line(tool_line))
-                        current_line = current_line + 1
-
-                        -- Track tool line
-                        table.insert(mappings, {
-                            line = current_line,
-                            type = "tool",
-                            context = vim.tbl_extend("force", tool, {
-                                server_name = server.name,
-                                hint = "Press <CR> to use tool",
-                            }),
-                        })
-                    end
-                end
-
-                -- Show resources section
-                table.insert(lines, Text.pad_line(NuiLine():append("│", Text.highlights.muted)))
-                current_line = current_line + 1
-
-                table.insert(
-                    lines,
-                    Text.pad_line(
-                        NuiLine():append("│ ", Text.highlights.muted):append("Resources:", Text.highlights.muted)
-                    )
-                )
-                current_line = current_line + 1
-
-                -- Show resources if any
-                if #server.capabilities.resources > 0 then
-                    for _, resource in ipairs(server.capabilities.resources) do
-                        local resource_line = NuiLine()
-                            :append("│  • ", Text.highlights.muted)
-                            :append(resource.name, Text.highlights.success)
-                            :append(" (", Text.highlights.muted)
-                            :append(resource.mimeType or "unknown", Text.highlights.info)
-                            :append(")", Text.highlights.muted)
-                        table.insert(lines, Text.pad_line(resource_line))
-                        current_line = current_line + 1
-
-                        -- Track resource line
-                        table.insert(mappings, {
-                            line = current_line,
-                            type = "resource",
-                            context = vim.tbl_extend("force", resource, {
-                                server_name = server.name,
-                                hint = "Press <CR> to access resource",
-                            }),
-                        })
-                    end
-                end
-            end
-        else
-            -- Compact view with capabilities summary
-            if server.capabilities and server.status == "connected" then
-                local cap_parts = {}
-                if #server.capabilities.tools > 0 then
-                    table.insert(cap_parts, string.format("Tools: %d", #server.capabilities.tools))
-                end
-                if #server.capabilities.resources > 0 then
-                    table.insert(cap_parts, string.format("Resources: %d", #server.capabilities.resources))
-                end
-                if #cap_parts > 0 then
-                    local cap_line = NuiLine()
-                        :append("  └─ ", Text.highlights.muted)
-                        :append(table.concat(cap_parts, ", "), Text.highlights.info)
-                    table.insert(lines, Text.pad_line(cap_line, nil, 4))
-                    current_line = current_line + 1
-                end
-            end
-        end
-    end
-
-    table.insert(lines, Text.empty_line())
-    return {
-        lines = lines,
-        mappings = mappings,
-    }
-end
-
---- Sort and render a list of servers
----@param servers table[] List of servers
----@param line_offset number Current line offset
----@param options? { expanded: boolean } Render options
----@return { lines: NuiLine[], mappings: table[] }
-function M.render_servers(servers, line_offset, options)
-    -- Sort servers: connected first, disabled last
-    table.sort(servers, function(a, b)
-        if a.status == "disabled" then
-            return false
-        end
-        if b.status == "disabled" then
-            return true
-        end
-        return a.name < b.name
-    end)
-
-    local lines = {}
-    local mappings = {}
-    local current_line = line_offset
-
-    for _, server in ipairs(servers) do
-        local result = M.render_server_details(server, current_line, options)
-        vim.list_extend(lines, result.lines)
-        vim.list_extend(mappings, result.mappings)
-        current_line = current_line + #result.lines
-    end
-
-    return {
-        lines = lines,
-        mappings = mappings,
-    }
 end
 
 -- Format timestamp (could be Unix timestamp or ISO string)

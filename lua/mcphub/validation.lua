@@ -40,6 +40,24 @@ function M.validate_setup_opts(opts)
     }
 end
 
+local function validate_custom_instructions(custom_instructions)
+    if type(custom_instructions) ~= "table" then
+        return false
+    end
+
+    -- Validate text field if present
+    if custom_instructions.text ~= nil and type(custom_instructions.text) ~= "string" then
+        return false
+    end
+
+    -- Validate disabled field if present
+    if custom_instructions.disabled ~= nil and type(custom_instructions.disabled) ~= "boolean" then
+        return false
+    end
+
+    return true
+end
+
 --- Validate MCP config file
 ---@param path string
 ---@return ValidationResult
@@ -89,8 +107,9 @@ function M.validate_config_file(path)
         }
     end
 
-    -- Validate disabled_tools for each server
+    -- Validate disabled_tools and custom_instructions for each server
     for server_name, server_config in pairs(json.mcpServers) do
+        -- Validate disabled_tools if present
         if server_config.disabled_tools ~= nil then
             if type(server_config.disabled_tools) ~= "table" then
                 return {
@@ -116,6 +135,21 @@ function M.validate_config_file(path)
                         ),
                     }
                 end
+            end
+        end
+
+        -- Validate custom_instructions if present
+        if server_config.custom_instructions ~= nil then
+            if not validate_custom_instructions(server_config.custom_instructions) then
+                return {
+                    ok = false,
+                    content = content,
+                    error = Error(
+                        "SETUP",
+                        Error.Types.SETUP.INVALID_CONFIG,
+                        string.format("Invalid custom_instructions format in server %s", server_name)
+                    ),
+                }
             end
         end
     end
