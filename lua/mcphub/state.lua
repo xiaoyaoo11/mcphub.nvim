@@ -79,6 +79,20 @@ function State:reset()
     State.server_output = {
         entries = {},
     }
+    State.marketplace_state = {
+        status = "loading",
+        catalog = {
+            items = {},
+            last_updated = nil,
+        },
+        filters = {
+            search = "",
+            category = "",
+            sort = "stars",
+        },
+        selected_server = nil,
+        server_details = {},
+    }
     State.last_update = 0
 end
 

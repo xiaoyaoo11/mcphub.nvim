@@ -75,13 +75,54 @@ function MarketplaceView:filter_and_sort_items(items)
     local filters = State.marketplace_state.filters
     local filtered = items
 
-    -- Apply search filter
+    -- Apply search filter with ranking
     if filters.search ~= "" and #filters.search > 0 then
-        filtered = vim.tbl_filter(function(item)
-            local search_text = filters.search:lower()
-            return (item.name and item.name:lower():find(search_text))
-                or (item.description and item.description:lower():find(search_text))
-        end, filtered)
+        local ranked_items = {}
+        local search_text = filters.search:lower()
+
+        -- First pass: collect items with ranks
+        for _, item in ipairs(filtered) do
+            local rank = 5 -- Default rank (no match)
+
+            if item.name then
+                local name_lower = item.name:lower()
+                if name_lower == search_text then
+                    rank = 1 -- Exact name match
+                elseif name_lower:find("^" .. search_text) then
+                    rank = 2 -- Name starts with search text
+                elseif name_lower:find(search_text) then
+                    rank = 3 -- Name contains search text
+                end
+            end
+
+            -- Check description only if we haven't found a name match
+            if rank == 5 and item.description and item.description:lower():find(search_text) then
+                rank = 4 -- Description match
+            end
+
+            -- Only include items that actually matched
+            if rank < 5 then
+                table.insert(ranked_items, {
+                    item = item,
+                    rank = rank,
+                })
+            end
+        end
+
+        -- Sort by rank
+        table.sort(ranked_items, function(a, b)
+            if a.rank ~= b.rank then
+                return a.rank < b.rank
+            end
+            -- If ranks are equal, sort by name
+            return (a.item.name or ""):lower() < (b.item.name or ""):lower()
+        end)
+
+        -- Extract just the items
+        filtered = vim.tbl_map(function(ranked)
+            return ranked.item
+        end, ranked_items)
+        return filtered
     end
 
     -- Apply category filter
@@ -165,6 +206,7 @@ function MarketplaceView:setup_active_mode()
                                     },
                                 },
                             }, "marketplace")
+                            self:focus_first_interactive_line()
                         end
                     end)
                 end,
@@ -173,8 +215,8 @@ function MarketplaceView:setup_active_mode()
             ["s"] = {
                 action = function()
                     local sorts = {
-                        { text = "Newest First", value = "newest" },
                         { text = "Most Stars", value = "stars" },
+                        { text = "Newest First", value = "newest" },
                         { text = "Name (A-Z)", value = "name" },
                     }
                     vim.ui.select(sorts, {
@@ -216,6 +258,7 @@ function MarketplaceView:setup_active_mode()
                                     },
                                 },
                             }, "marketplace")
+                            self:focus_first_interactive_line()
                         end
                     end)
                 end,
@@ -285,42 +328,36 @@ function MarketplaceView:setup_active_mode()
                 action = function()
                     local cursor = vim.api.nvim_win_get_cursor(0)
                     local type, context = self:get_line_info(cursor[1])
-                    if type == "install" then
-                        local is_installed = State:is_server_installed(self.selected_server.mcpId)
+                    -- Only allow installation if not already installed
+                    if type == "install" and not State:is_server_installed(self.selected_server.mcpId) then
+                        -- Get available installers
+                        local available_installers = self:get_available_installers()
 
-                        if is_installed then
-                            -- Handle uninstall
-                            self:handle_uninstall(self.selected_server)
-                        else
-                            -- Get available installers
-                            local available_installers = self:get_available_installers()
+                        if #available_installers > 0 then
+                            -- Create selection items with installer names
+                            local items = vim.tbl_map(function(installer)
+                                return installer.name
+                            end, available_installers)
 
-                            if #available_installers > 0 then
-                                -- Create selection items with installer names
-                                local items = vim.tbl_map(function(installer)
-                                    return installer.name
-                                end, available_installers)
-
-                                -- Show installer selection
-                                vim.ui.select(items, {
-                                    prompt = "Choose installer:",
-                                }, function(choice)
-                                    if choice then
-                                        -- Find selected installer
-                                        for _, installer in ipairs(available_installers) do
-                                            if installer.name == choice then
-                                                self:handle_install(self.selected_server, installer.id)
-                                                break
-                                            end
+                            -- Show installer selection
+                            vim.ui.select(items, {
+                                prompt = "Choose installer:",
+                            }, function(choice)
+                                if choice then
+                                    -- Find selected installer
+                                    for _, installer in ipairs(available_installers) do
+                                        if installer.name == choice then
+                                            self:handle_install(self.selected_server, installer.id)
+                                            break
                                         end
                                     end
-                                end)
-                            else
-                                vim.notify(
-                                    "No installers available. Please install CodeCompanion or Avante.",
-                                    vim.log.levels.ERROR
-                                )
-                            end
+                                end
+                            end)
+                        else
+                            vim.notify(
+                                "No installers available. Please install CodeCompanion or Avante.",
+                                vim.log.levels.ERROR
+                            )
                         end
                     end
                 end,
@@ -576,20 +613,25 @@ function MarketplaceView:render_details_mode(line_offset)
         local is_loading = details == nil
         local is_installed = State:is_server_installed(server.mcpId)
 
-        -- Install/Uninstall button
-        local button_text = is_loading and "Loading..." or (is_installed and "Uninstall" or "Install")
-        local button_hl = is_loading and Text.highlights.muted
-            or (is_installed and Text.highlights.error_fill or Text.highlights.active_item)
-        local icon = is_loading and Text.icons.loading or (is_installed and Text.icons.uninstall or Text.icons.install)
-        local button_line = NuiLine():append(" " .. icon .. " " .. button_text .. " ", button_hl)
-        if not is_installed and not is_loading then
+        -- Install button or status
+        local button_line = NuiLine()
+        if is_loading then
+            -- Show only loading state
+            button_line:append(" " .. Text.icons.loading .. " ", Text.highlights.muted)
+            button_line:append("Loading...", Text.highlights.muted)
+        elseif is_installed then
+            -- Just show installed status
+            button_line:append(" " .. Text.icons.install .. " ", Text.highlights.success)
+            button_line:append("Installed", Text.highlights.success)
+        else
+            -- Show install button with available installers
+            button_line:append(" " .. Text.icons.install .. " ", Text.highlights.active_item)
+            button_line:append("Install", Text.highlights.active_item)
             button_line:append(" with: ", Text.highlights.muted)
 
             -- Check each installer
-            local has_installers = false
             for id, installer in pairs(Installers) do
                 if installer.check() then
-                    has_installers = true
                     button_line
                         :append("[" .. installer.name .. "]", Text.highlights.success)
                         :append(" ", Text.highlights.muted)
@@ -606,13 +648,13 @@ function MarketplaceView:render_details_mode(line_offset)
         end
         table.insert(lines, Text.pad_line(button_line))
 
-        -- Track install/uninstall button only when details are loaded
-        if details then
+        -- Only track install button if server is not installed and not loading
+        if not is_loading and not is_installed then
             self:track_line(#lines + line_offset, "install", {
-                type = is_installed and "uninstall" or "install",
+                type = "install",
                 mcpId = server.mcpId,
                 server = server,
-                hint = is_installed and "Press <CR> to uninstall" or "Press <CR> to install",
+                hint = "Press <CR> to install",
             })
         end
         table.insert(lines, Text.pad_line(NuiLine()))
@@ -687,6 +729,14 @@ function MarketplaceView:render()
 end
 
 -- Get available installers
+function MarketplaceView:focus_first_interactive_line()
+    vim.schedule(function()
+        if self.interactive_lines and #self.interactive_lines > 0 then
+            vim.api.nvim_win_set_cursor(0, { self.interactive_lines[1].line, 0 })
+        end
+    end)
+end
+
 function MarketplaceView:get_available_installers()
     local available = {}
     for id, installer in pairs(Installers) do
@@ -718,58 +768,5 @@ function MarketplaceView:get_server_state(mcpId)
         end
     end
     return nil
-end
--- Handle installation with selected installer
-function MarketplaceView:handle_uninstall(server)
-    -- Get config file path and server status
-    local config_file = State.config.config
-    local server_state = self:get_server_state(server.mcpId)
-
-    vim.ui.select({ "Yes", "No" }, {
-        prompt = string.format(
-            "Are you sure you want to uninstall '%s'?\nThis will remove its configuration from %s",
-            server.name,
-            config_file
-        ),
-    }, function(choice)
-        if choice == "Yes" then
-            -- Close UI first as config might be reloaded
-            self.ui:cleanup()
-            -- Function to remove server config
-            local function remove_config()
-                local success, _ = State.hub_instance:remove_server_config(server.mcpId)
-                if success then
-                    vim.notify(string.format("Successfully uninstalled %s", server.name), vim.log.levels.INFO)
-                else
-                    vim.notify(
-                        string.format("Failed to uninstall %s. Check logs for details.", server.name),
-                        vim.log.levels.ERROR
-                    )
-                end
-            end
-
-            -- If server is running, stop it first
-            if server_state and server_state.status == "connected" then
-                if State.hub_instance then
-                    State.hub_instance:stop_mcp_server(server.mcpId, false, {
-                        callback = function(_, err)
-                            if err then
-                                vim.notify(
-                                    string.format("Failed to stop %s: %s", server.name, err),
-                                    vim.log.levels.ERROR
-                                )
-                                return
-                            end
-                            -- After stopping, remove config
-                            remove_config()
-                        end,
-                    })
-                end
-            else
-                -- Server not running, just remove config
-                remove_config()
-            end
-        end
-    end)
 end
 return MarketplaceView
