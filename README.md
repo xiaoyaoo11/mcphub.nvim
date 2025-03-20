@@ -13,7 +13,12 @@ A powerful Neovim plugin that integrates MCP (Model Context Protocol) servers in
 <video controls muted src="https://github.com/user-attachments/assets/22d14360-5994-455b-8789-4fffd2b598e2"></video>
 </p>
 </div>
-
+<div align="center">
+    <p>
+    <h4>MCP Hub + <a href="https://github.com/yetone/avante.nvim">Avante</a> </h4>
+    <video controls muted src="https://github.com/user-attachments/assets/e33fb5c3-7dbd-40b2-bec5-471a465c7f4d"></video>
+    </p>
+</div>
 <div align="center">
 <p>
 <h4>Using <a href="https://github.com/olimorris/codecompanion.nvim">codecompanion</a></h4>
