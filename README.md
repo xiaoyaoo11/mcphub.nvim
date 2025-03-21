@@ -262,6 +262,7 @@ Note: You can also access the Express server directly at http://localhost:[port]
 
 ## 🔧 Troubleshooting
 
+
 1. **Environment Requirements**
 
    - Ensure these are installed as they're required by most MCP servers:
@@ -296,8 +297,9 @@ Note: You can also access the Express server directly at http://localhost:[port]
    - Test tools and resources individually to isolate issues
 
 5. **Need Help?**
-   - Create a [Discussion](https://github.com/ravitemer/mcphub.nvim/discussions) for questions
-   - Open an [Issue](https://github.com/ravitemer/mcphub.nvim/issues) for bugs
+   - First try testing it with [minimal.lua](https://gist.github.com/ravitemer/c85d69542bdfd1a45c6a9849301e4388) 
+   - Feel free to open an [Issue](https://github.com/ravitemer/mcphub.nvim/issues) for bugs or doubts
+   - Create a [Discussion](https://github.com/ravitemer/mcphub.nvim/discussions) for questions, showcase, or feature requests
 
 ## 🔄 How It Works
 
