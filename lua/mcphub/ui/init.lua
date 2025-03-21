@@ -12,8 +12,8 @@ UI.__index = UI
 
 -- Constants for window sizing and layout
 local WINDOW_CONSTANTS = {
-    WIDTH_RATIO = 0.9,
-    HEIGHT_RATIO = 0.9,
+    WIDTH_RATIO = 0.79,
+    HEIGHT_RATIO = 0.79,
     MIN_WIDTH = 40,
 }
 
